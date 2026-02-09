@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Путь к папке с завершенными загрузками
-BASE_DIR="/root/mult_tv/downloads/complete"
+BASE_DIR="/root/mult_tv/mult_tv/downloads/complete"
 cd "$BASE_DIR" || exit
 
 echo "--- Запуск умного сканирования аудиодорожек ---"
