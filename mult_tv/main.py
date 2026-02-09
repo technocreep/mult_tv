@@ -29,6 +29,9 @@ class CreateUserRequest(BaseModel):
 class ChangePasswordRequest(BaseModel):
     password: str
 
+class MarkWatchedRequest(BaseModel):
+    file_path: str
+
 # --- Утилиты для паролей ---
 
 def hash_password(password: str, salt: str = None):
@@ -166,8 +169,14 @@ async def me(request: Request):
 
 # --- Защищённые эндпоинты ---
 
+def get_top_folder(file_path):
+    """Возвращает имя папки верхнего уровня относительно VIDEO_DIR."""
+    rel = os.path.relpath(file_path, VIDEO_DIR)
+    parts = rel.split(os.sep)
+    return parts[0] if len(parts) > 1 else ""
+
 @app.get("/api/get_random")
-async def get_random_video(request: Request):
+async def get_random_video(request: Request, current_path: str = ""):
     require_auth(request)
 
     conn = get_db()
@@ -192,17 +201,21 @@ async def get_random_video(request: Request):
         conn.close()
         return {"error": "Папка загрузок пуста"}
 
-    chosen_video = random.choice(available_files)
+    # Исключаем файлы из текущей папки (переключаем шоу)
+    if current_path:
+        current_folder = get_top_folder(current_path)
+        other_folder_files = [f for f in available_files if get_top_folder(f) != current_folder]
+        if other_folder_files:
+            available_files = other_folder_files
 
-    cursor.execute('INSERT INTO history (file_path, watched_at) VALUES (?, ?)',
-                   (chosen_video, datetime.now()))
-    conn.commit()
+    chosen_video = random.choice(available_files)
     conn.close()
 
     rel_path = os.path.relpath(chosen_video, VIDEO_DIR)
     return {
         "title": os.path.basename(chosen_video),
-        "url": f"/stream/{rel_path}"
+        "url": f"/stream/{rel_path}",
+        "file_path": chosen_video
     }
 
 @app.get("/stream/{file_path:path}")
@@ -212,6 +225,22 @@ async def stream_video(file_path: str, request: Request):
     if not os.path.exists(full_path):
         raise HTTPException(status_code=404)
     return FileResponse(full_path)
+
+@app.post("/api/mark_watched")
+async def mark_watched(data: MarkWatchedRequest, request: Request):
+    require_auth(request)
+    conn = get_db()
+    today_start = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
+    existing = conn.execute(
+        'SELECT id FROM history WHERE file_path = ? AND watched_at > ?',
+        (data.file_path, today_start)
+    ).fetchone()
+    if not existing:
+        conn.execute('INSERT INTO history (file_path, watched_at) VALUES (?, ?)',
+                     (data.file_path, datetime.now()))
+        conn.commit()
+    conn.close()
+    return {"ok": True}
 
 # --- Админские эндпоинты ---
 
