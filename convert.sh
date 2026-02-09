@@ -6,7 +6,7 @@ cd "$BASE_DIR" || exit
 
 echo "--- Запуск умного сканирования аудиодорожек ---"
 
-find . \( -name "*.mkv" -o -name "*.avi" \) -type f | while read -r source_file; do
+find . \( -name "*.mkv" -o -name "*.avi" \) -type f -print0 | while IFS= read -r -d '' source_file; do
     # Формируем имя mp4-файла (заменяем расширение)
     mp4_file="${source_file%.*}.mp4"
 
@@ -45,7 +45,7 @@ find . \( -name "*.mkv" -o -name "*.avi" \) -type f | while read -r source_file;
         # Конвертация:
         # -map 0:v:0 (видео)
         # -map $map_audio (выбранное аудио)
-        ffmpeg -i "$source_file" \
+        ffmpeg -nostdin -i "$source_file" \
             -map 0:v:0 -map "$map_audio" \
             $video_opts -c:a aac -ac 2 -b:a 192k \
             -movflags +faststart \
