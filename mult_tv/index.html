@@ -43,6 +43,7 @@
             const [glitchDone, setGlitchDone] = useState(false);
             const [fetchDone, setFetchDone] = useState(false);
             const [error, setError] = useState(null);
+            const videoRef = useRef(null);
 
             const handleLogin = (e) => {
                 e.preventDefault();
@@ -90,8 +91,23 @@
                     setIsOn(true);
                     setTimeout(getNext, 200);
                 } else {
-                    // Запускаем анимацию выключения
+                    // Останавливаем основное видео перед анимацией выключения
+                    if (videoRef.current) {
+                        videoRef.current.pause();
+                        videoRef.current.removeAttribute('src');
+                        videoRef.current.load();
+                    }
                     setTurningOff(true);
+                }
+            };
+
+            const toggleFullscreen = () => {
+                if (videoRef.current) {
+                    if (videoRef.current.requestFullscreen) {
+                        videoRef.current.requestFullscreen();
+                    } else if (videoRef.current.webkitEnterFullscreen) {
+                        videoRef.current.webkitEnterFullscreen();
+                    }
                 }
             };
 
@@ -135,6 +151,7 @@
                             {/* Основное видео (серия) */}
                             {isOn && video && !switching ? (
                                 <video
+                                    ref={videoRef}
                                     src={video.url}
                                     autoPlay
                                     onEnded={getNext}
@@ -177,11 +194,11 @@
                         </div>
 
                         {/* Панель кнопок */}
-                        <div className="w-28 ml-10 flex flex-col justify-center items-center gap-16">
+                        <div className="w-28 ml-10 flex flex-col justify-center items-center gap-10">
                             <div className="flex flex-col items-center gap-3">
                                 <div className={`w-2 h-2 rounded-full transition-all duration-500 ${isOn ? 'bg-red-500 shadow-[0_0_12px_red]' : 'bg-zinc-950'}`}></div>
-                                <button 
-                                    onClick={togglePower} 
+                                <button
+                                    onClick={togglePower}
                                     className={`w-16 h-16 rounded-full border-4 flex items-center justify-center transition-all active:scale-90 shadow-xl ${isOn ? 'bg-red-600 border-red-500' : 'bg-zinc-900 border-zinc-800'}`}
                                 >
                                     <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2v10"/><path d="M18.4 6.6a9 9 0 1 1-12.77.04"/></svg>
@@ -189,12 +206,22 @@
                             </div>
 
                             <div className="flex flex-col items-center gap-3">
-                                <button 
-                                    onClick={getNext} 
-                                    disabled={!isOn || switching} 
+                                <button
+                                    onClick={getNext}
+                                    disabled={!isOn || switching}
                                     className={`w-16 h-16 rounded-2xl border-4 flex items-center justify-center transition-all active:scale-90 shadow-xl ${isOn && !switching ? 'bg-zinc-100 border-white text-black' : 'bg-zinc-900 border-zinc-800 text-zinc-800'}`}
                                 >
                                     <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="m6 17 5-5-5-5"/><path d="m13 17 5-5-5-5"/></svg>
+                                </button>
+                            </div>
+
+                            <div className="flex flex-col items-center gap-3">
+                                <button
+                                    onClick={toggleFullscreen}
+                                    disabled={!isOn || !video || switching}
+                                    className={`w-16 h-16 rounded-2xl border-4 flex items-center justify-center transition-all active:scale-90 shadow-xl ${isOn && video && !switching ? 'bg-zinc-600 border-zinc-500 text-white' : 'bg-zinc-900 border-zinc-800 text-zinc-800'}`}
+                                >
+                                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M8 3H5a2 2 0 0 0-2 2v3"/><path d="M21 8V5a2 2 0 0 0-2-2h-3"/><path d="M3 16v3a2 2 0 0 0 2 2h3"/><path d="M16 21h3a2 2 0 0 0 2-2v-3"/></svg>
                                 </button>
                             </div>
                         </div>
@@ -203,7 +230,7 @@
                     {/* Инфо-строка */}
                     <div className="mt-10 h-4">
                         {isOn && video && !switching && (
-                            <div className="text-zinc-600 text-[9px] uppercase tracking-[0.5em] font-bold animate-pulse">
+                            <div className="text-zinc-600 text-[9px] uppercase tracking-[0.5em] font-bold">
                                 Playing: {video.title}
                             </div>
                         )}
