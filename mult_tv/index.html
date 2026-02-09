@@ -10,11 +10,11 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;700&display=swap');
-        body { 
-            font-family: 'Fira Code', monospace; 
-            background-color: #0c0a09; 
-            margin: 0; 
-            overflow: hidden; 
+        body {
+            font-family: 'Fira Code', monospace;
+            background-color: #0c0a09;
+            margin: 0;
+            overflow: hidden;
             color: #d6d3d1;
         }
         .tv-frame {
@@ -24,7 +24,6 @@
             background: #000;
             box-shadow: inset 0 0 60px rgba(0,0,0,1);
         }
-        /* Убрали полоски и шумы, оставили только чистое видео */
     </style>
 </head>
 <body>
@@ -32,9 +31,188 @@
     <script type="text/babel">
         const { useState, useEffect, useRef } = React;
 
+        // --- Админ-панель ---
+        const AdminPanel = ({ onClose }) => {
+            const [tab, setTab] = useState('users');
+            const [users, setUsers] = useState([]);
+            const [videos, setVideos] = useState([]);
+            const [stats, setStats] = useState(null);
+            const [newUser, setNewUser] = useState('');
+            const [newPass, setNewPass] = useState('');
+            const [newRole, setNewRole] = useState('user');
+            const [changePwId, setChangePwId] = useState(null);
+            const [changePwVal, setChangePwVal] = useState('');
+
+            const loadUsers = async () => {
+                const res = await fetch('/api/admin/users');
+                setUsers(await res.json());
+            };
+            const loadVideos = async () => {
+                const res = await fetch('/api/admin/videos');
+                setVideos(await res.json());
+            };
+            const loadStats = async () => {
+                const res = await fetch('/api/admin/stats');
+                setStats(await res.json());
+            };
+
+            useEffect(() => { loadUsers(); loadStats(); }, []);
+            useEffect(() => { if (tab === 'content') loadVideos(); }, [tab]);
+
+            const addUser = async (e) => {
+                e.preventDefault();
+                if (!newUser || !newPass) return;
+                await fetch('/api/admin/users', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({username: newUser, password: newPass, role: newRole})
+                });
+                setNewUser(''); setNewPass(''); setNewRole('user');
+                loadUsers(); loadStats();
+            };
+
+            const deleteUser = async (id) => {
+                if (!confirm('Delete this user?')) return;
+                await fetch(`/api/admin/users/${id}`, {method: 'DELETE'});
+                loadUsers(); loadStats();
+            };
+
+            const changePassword = async (id) => {
+                if (!changePwVal) return;
+                await fetch(`/api/admin/users/${id}/password`, {
+                    method: 'PUT',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({password: changePwVal})
+                });
+                setChangePwId(null); setChangePwVal('');
+            };
+
+            const deleteVideo = async (path) => {
+                if (!confirm('Delete this video?')) return;
+                await fetch(`/api/admin/videos/${path}`, {method: 'DELETE'});
+                loadVideos(); loadStats();
+            };
+
+            const resetHistory = async () => {
+                if (!confirm('Reset all watch history?')) return;
+                await fetch('/api/admin/history', {method: 'DELETE'});
+                loadStats();
+            };
+
+            const inputClass = "bg-black border border-zinc-700 rounded-lg py-2 px-3 text-white text-sm outline-none focus:border-red-600 transition-colors";
+            const btnClass = "bg-zinc-700 text-white text-xs font-bold py-2 px-4 rounded-lg hover:bg-zinc-600 transition-all active:scale-95 uppercase tracking-wider";
+            const btnDanger = "bg-red-900 text-red-200 text-xs font-bold py-2 px-4 rounded-lg hover:bg-red-800 transition-all active:scale-95 uppercase tracking-wider";
+
+            return (
+                <div className="fixed inset-0 z-[100] bg-black/80 flex items-center justify-center p-4" onClick={onClose}>
+                    <div className="bg-zinc-900 border border-zinc-800 rounded-2xl w-full max-w-2xl max-h-[80vh] overflow-hidden flex flex-col" onClick={e => e.stopPropagation()}>
+                        {/* Header */}
+                        <div className="flex items-center justify-between p-5 border-b border-zinc-800">
+                            <h2 className="text-zinc-400 text-xs tracking-[0.4em] font-bold uppercase">Admin Panel</h2>
+                            <button onClick={onClose} className="text-zinc-600 hover:text-white text-xl">&times;</button>
+                        </div>
+
+                        {/* Tabs */}
+                        <div className="flex border-b border-zinc-800">
+                            {['users', 'content'].map(t => (
+                                <button key={t} onClick={() => setTab(t)}
+                                    className={`flex-1 py-3 text-xs uppercase tracking-widest font-bold transition-colors ${tab === t ? 'text-white border-b-2 border-red-600' : 'text-zinc-600 hover:text-zinc-400'}`}>
+                                    {t === 'users' ? 'Users' : 'Content'}
+                                </button>
+                            ))}
+                        </div>
+
+                        {/* Body */}
+                        <div className="p-5 overflow-y-auto flex-1">
+                            {/* Stats */}
+                            {stats && (
+                                <div className="flex gap-4 mb-5">
+                                    <div className="bg-zinc-800 rounded-lg px-4 py-2 text-center flex-1">
+                                        <div className="text-white text-lg font-bold">{stats.total_users}</div>
+                                        <div className="text-zinc-500 text-[9px] uppercase tracking-widest">Users</div>
+                                    </div>
+                                    <div className="bg-zinc-800 rounded-lg px-4 py-2 text-center flex-1">
+                                        <div className="text-white text-lg font-bold">{stats.total_videos}</div>
+                                        <div className="text-zinc-500 text-[9px] uppercase tracking-widest">Videos</div>
+                                    </div>
+                                    <div className="bg-zinc-800 rounded-lg px-4 py-2 text-center flex-1">
+                                        <div className="text-white text-lg font-bold">{stats.total_views}</div>
+                                        <div className="text-zinc-500 text-[9px] uppercase tracking-widest">Views</div>
+                                    </div>
+                                </div>
+                            )}
+
+                            {tab === 'users' && (
+                                <div className="space-y-4">
+                                    {/* User list */}
+                                    {users.map(u => (
+                                        <div key={u.id} className="flex items-center justify-between bg-zinc-800 rounded-lg px-4 py-3">
+                                            <div>
+                                                <span className="text-white text-sm font-bold">{u.username}</span>
+                                                <span className={`ml-2 text-[9px] uppercase tracking-widest px-2 py-0.5 rounded ${u.role === 'admin' ? 'bg-red-900 text-red-300' : 'bg-zinc-700 text-zinc-400'}`}>{u.role}</span>
+                                            </div>
+                                            <div className="flex gap-2">
+                                                {changePwId === u.id ? (
+                                                    <div className="flex gap-2">
+                                                        <input type="password" placeholder="New password" value={changePwVal} onChange={e => setChangePwVal(e.target.value)} className={inputClass + " w-32"} />
+                                                        <button onClick={() => changePassword(u.id)} className={btnClass}>Save</button>
+                                                        <button onClick={() => setChangePwId(null)} className="text-zinc-500 text-xs">Cancel</button>
+                                                    </div>
+                                                ) : (
+                                                    <>
+                                                        <button onClick={() => { setChangePwId(u.id); setChangePwVal(''); }} className={btnClass}>Password</button>
+                                                        <button onClick={() => deleteUser(u.id)} className={btnDanger}>Delete</button>
+                                                    </>
+                                                )}
+                                            </div>
+                                        </div>
+                                    ))}
+
+                                    {/* Add user form */}
+                                    <form onSubmit={addUser} className="flex gap-2 items-end pt-2 border-t border-zinc-800">
+                                        <input placeholder="Username" value={newUser} onChange={e => setNewUser(e.target.value)} className={inputClass + " flex-1"} />
+                                        <input type="password" placeholder="Password" value={newPass} onChange={e => setNewPass(e.target.value)} className={inputClass + " flex-1"} />
+                                        <select value={newRole} onChange={e => setNewRole(e.target.value)} className={inputClass}>
+                                            <option value="user">user</option>
+                                            <option value="admin">admin</option>
+                                        </select>
+                                        <button type="submit" className={btnClass}>Add</button>
+                                    </form>
+                                </div>
+                            )}
+
+                            {tab === 'content' && (
+                                <div className="space-y-4">
+                                    <button onClick={resetHistory} className={btnDanger}>Reset Watch History</button>
+
+                                    {videos.map(v => (
+                                        <div key={v.path} className="flex items-center justify-between bg-zinc-800 rounded-lg px-4 py-3">
+                                            <div className="flex-1 min-w-0 mr-4">
+                                                <div className="text-white text-sm truncate">{v.name}</div>
+                                                <div className="text-zinc-500 text-[9px]">{v.size_mb} MB</div>
+                                            </div>
+                                            <button onClick={() => deleteVideo(v.path)} className={btnDanger}>Delete</button>
+                                        </div>
+                                    ))}
+
+                                    {videos.length === 0 && (
+                                        <div className="text-zinc-600 text-sm text-center py-8">No videos found</div>
+                                    )}
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        // --- Основное приложение ---
         const App = () => {
-            const [isLoggedIn, setIsLoggedIn] = useState(false);
-            const [pass, setPass] = useState('');
+            const [user, setUser] = useState(null);
+            const [loading, setLoading] = useState(true);
+            const [username, setUsername] = useState('');
+            const [password, setPassword] = useState('');
+            const [loginError, setLoginError] = useState('');
             const [isOn, setIsOn] = useState(false);
             const [video, setVideo] = useState(null);
             const [switching, setSwitching] = useState(false);
@@ -43,13 +221,39 @@
             const [glitchDone, setGlitchDone] = useState(false);
             const [fetchDone, setFetchDone] = useState(false);
             const [error, setError] = useState(null);
+            const [showAdmin, setShowAdmin] = useState(false);
             const videoRef = useRef(null);
 
-            const handleLogin = (e) => {
+            // Проверяем сессию при загрузке
+            useEffect(() => {
+                fetch('/api/me').then(r => {
+                    if (r.ok) return r.json();
+                    throw new Error();
+                }).then(data => setUser(data))
+                  .catch(() => {})
+                  .finally(() => setLoading(false));
+            }, []);
+
+            const handleLogin = async (e) => {
                 e.preventDefault();
-                // Для теста оставил 1234, как в твоем примере
-                if (pass === '1234') setIsLoggedIn(true);
-                else alert('Access Denied');
+                setLoginError('');
+                try {
+                    const res = await fetch('/api/login', {
+                        method: 'POST',
+                        headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify({username, password})
+                    });
+                    if (!res.ok) { setLoginError('Invalid credentials'); return; }
+                    const data = await res.json();
+                    setUser(data);
+                } catch { setLoginError('Connection error'); }
+            };
+
+            const handleLogout = async () => {
+                await fetch('/api/logout', {method: 'POST'});
+                setUser(null);
+                setIsOn(false);
+                setVideo(null);
             };
 
             // Когда и glitch закончился, и fetch вернул данные — показываем серию
@@ -72,6 +276,7 @@
                 setError(null);
                 try {
                     const res = await fetch('/api/get_random');
+                    if (res.status === 401) { setUser(null); return; }
                     const data = await res.json();
                     if (data.error) {
                         setError(data.error);
@@ -91,7 +296,6 @@
                     setIsOn(true);
                     setTimeout(getNext, 200);
                 } else {
-                    // Останавливаем основное видео перед анимацией выключения
                     if (videoRef.current) {
                         videoRef.current.pause();
                         videoRef.current.removeAttribute('src');
@@ -119,19 +323,34 @@
                 setError(null);
             };
 
-            if (!isLoggedIn) {
+            if (loading) {
+                return <div className="h-screen flex items-center justify-center bg-black text-zinc-600 text-xs uppercase tracking-widest">Loading...</div>;
+            }
+
+            // --- Экран логина ---
+            if (!user) {
                 return (
                     <div className="h-screen flex items-center justify-center bg-black">
                         <div className="bg-zinc-900 p-10 rounded-[2rem] border border-zinc-800 w-full max-w-sm">
                             <h1 className="text-zinc-500 text-xs tracking-[0.4em] text-center mb-8 font-bold uppercase">System Auth</h1>
-                            <form onSubmit={handleLogin} className="space-y-6">
-                                <input 
-                                    type="password" 
-                                    placeholder="••••" 
-                                    className="w-full bg-black border border-zinc-800 rounded-xl py-4 px-4 text-white text-center text-2xl outline-none focus:border-red-600 transition-colors" 
-                                    value={pass} 
-                                    onChange={e => setPass(e.target.value)} 
+                            <form onSubmit={handleLogin} className="space-y-4">
+                                <input
+                                    type="text"
+                                    placeholder="Username"
+                                    className="w-full bg-black border border-zinc-800 rounded-xl py-3 px-4 text-white outline-none focus:border-red-600 transition-colors"
+                                    value={username}
+                                    onChange={e => setUsername(e.target.value)}
+                                    autoComplete="username"
                                 />
+                                <input
+                                    type="password"
+                                    placeholder="Password"
+                                    className="w-full bg-black border border-zinc-800 rounded-xl py-3 px-4 text-white outline-none focus:border-red-600 transition-colors"
+                                    value={password}
+                                    onChange={e => setPassword(e.target.value)}
+                                    autoComplete="current-password"
+                                />
+                                {loginError && <div className="text-red-500 text-xs text-center">{loginError}</div>}
                                 <button className="w-full bg-zinc-100 text-black font-black py-4 rounded-xl hover:bg-white transition-all active:scale-95 uppercase tracking-widest text-sm">
                                     Initialize
                                 </button>
@@ -141,10 +360,26 @@
                 );
             }
 
+            // --- Основной интерфейс ---
             return (
-                <div className="h-screen flex flex-col items-center justify-center p-6">
+                <div className="h-screen flex flex-col items-center justify-center p-6 relative">
+                    {/* Верхняя панель: юзер + logout + admin */}
+                    <div className="absolute top-4 right-6 flex items-center gap-4 z-[60]">
+                        <span className="text-zinc-600 text-[9px] uppercase tracking-widest">{user.username}</span>
+                        {user.role === 'admin' && (
+                            <button onClick={() => setShowAdmin(true)} className="text-zinc-500 text-[9px] uppercase tracking-widest hover:text-white transition-colors border border-zinc-800 px-3 py-1 rounded-lg">
+                                Admin
+                            </button>
+                        )}
+                        <button onClick={handleLogout} className="text-zinc-600 text-[9px] uppercase tracking-widest hover:text-red-500 transition-colors">
+                            Logout
+                        </button>
+                    </div>
+
+                    {showAdmin && <AdminPanel onClose={() => setShowAdmin(false)} />}
+
                     <div className="relative bg-zinc-800 p-8 rounded-[4.5rem] tv-frame border-b-[16px] border-r-[12px] border-black max-w-5xl w-full aspect-[4/3] flex">
-                        
+
                         {/* Экран ТВ */}
                         <div className="relative flex-1 bg-black rounded-[2.5rem] overflow-hidden border-[16px] border-zinc-700 video-container flex items-center justify-center">
 
@@ -226,7 +461,7 @@
                             </div>
                         </div>
                     </div>
-                    
+
                     {/* Инфо-строка */}
                     <div className="mt-10 h-4">
                         {isOn && video && !switching && (

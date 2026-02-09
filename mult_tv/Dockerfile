@@ -2,7 +2,7 @@ FROM python:3.10-slim
 
 WORKDIR /app
 
-RUN pip install --no-cache-dir fastapi uvicorn starlette
+RUN pip install --no-cache-dir fastapi uvicorn starlette python-multipart
 
 # Создаем папки
 RUN mkdir -p /app/static /app/data
