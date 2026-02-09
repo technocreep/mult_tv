@@ -10,6 +10,7 @@ RUN mkdir -p /app/static /app/data
 # Копируем код
 COPY main.py .
 COPY index.html ./static/
+COPY assets/ ./static/assets/
 
 # Открываем порт
 EXPOSE 8000
