@@ -433,10 +433,10 @@
                     {showAdmin && <AdminPanel onClose={() => setShowAdmin(false)} />}
                     {showHearts && <HeartRain />}
 
-                    <div className="relative tv-shadow" style={{maxWidth: '800px', width: '100%', aspectRatio: '443/356'}}>
+                    <div className="relative tv-shadow" style={{maxWidth: '800px', width: '100%', aspectRatio: '885/708'}}>
 
                         {/* Видео слой — под вырез экрана */}
-                        <div className="absolute overflow-hidden bg-black flex items-center justify-center" style={{top:'6%', left:'7%', right:'8%', bottom:'22%', borderRadius:'4px'}}>
+                        <div className="absolute overflow-hidden bg-black flex items-center justify-center" style={{top:'9.9%', left:'15.8%', right:'15.3%', bottom:'26.6%', borderRadius:'4px'}}>
 
                             {/* Основное видео (серия) */}
                             {isOn && video && !switching ? (
@@ -489,22 +489,22 @@
 
                         {/* Индикатор */}
                         <div className={`absolute rounded-full transition-all duration-500 ${isOn ? 'bg-red-500 shadow-[0_0_8px_red]' : 'bg-zinc-900'}`}
-                             style={{top:'87.5%', left:'36.5%', width:'1.2%', height:'1.5%'}}></div>
+                             style={{top:'84.7%', left:'38.4%', width:'2.8%', height:'3.5%'}}></div>
 
                         {/* Невидимые кнопки поверх нарисованных */}
                         <button onClick={togglePower}
                                 className="absolute cursor-pointer opacity-0 hover:opacity-100 hover:bg-white/10 rounded transition-all active:scale-95"
-                                style={{top:'85%', left:'19%', width:'13%', height:'8%'}}
+                                style={{top:'83.3%', left:'27.1%', width:'5.1%', height:'12.7%'}}
                                 title="ВКЛ" />
                         <button onClick={getNext}
                                 disabled={!isOn || switching}
                                 className="absolute cursor-pointer opacity-0 hover:opacity-100 hover:bg-white/10 rounded transition-all active:scale-95"
-                                style={{top:'85%', left:'38%', width:'16%', height:'8%'}}
+                                style={{top:'83.3%', left:'54.2%', width:'4.5%', height:'12.7%'}}
                                 title="СЛЕД" />
                         <button onClick={toggleFullscreen}
                                 disabled={!isOn || !video || switching}
                                 className="absolute cursor-pointer opacity-0 hover:opacity-100 hover:bg-white/10 rounded transition-all active:scale-95"
-                                style={{top:'85%', left:'62%', width:'13%', height:'8%'}}
+                                style={{top:'83.3%', left:'67.8%', width:'5.1%', height:'12.7%'}}
                                 title="ФУЛ" />
                     </div>
 
