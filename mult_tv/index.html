@@ -31,7 +31,7 @@
         .heart {
             position: fixed;
             top: -30px;
-            animation: heartFall linear infinite;
+            animation: heartFall linear forwards;
             pointer-events: none;
             z-index: 55;
             user-select: none;
@@ -43,16 +43,16 @@
     <script type="text/babel">
         const { useState, useEffect, useRef } = React;
 
-        // --- Дождик из сердечек ---
+        // --- Ливень из сердечек ---
         const HeartRain = () => {
             const hearts = useRef(
-                Array.from({length: 20}, (_, i) => ({
+                Array.from({length: 50}, (_, i) => ({
                     id: i,
                     left: Math.random() * 100,
-                    size: 14 + Math.random() * 18,
-                    duration: 4 + Math.random() * 6,
-                    delay: Math.random() * 5,
-                    emoji: ['❤️', '💕', '💗', '💖'][Math.floor(Math.random() * 4)]
+                    size: 12 + Math.random() * 22,
+                    duration: 1.5 + Math.random() * 1.5,
+                    delay: Math.random() * 2.5,
+                    emoji: ['❤️', '💕', '💗', '💖', '💘', '💝'][Math.floor(Math.random() * 6)]
                 }))
             ).current;
             return (
@@ -260,6 +260,7 @@
             const [fetchDone, setFetchDone] = useState(false);
             const [error, setError] = useState(null);
             const [showAdmin, setShowAdmin] = useState(false);
+            const [showHearts, setShowHearts] = useState(false);
             const videoRef = useRef(null);
 
             // Проверяем сессию при загрузке
@@ -284,6 +285,10 @@
                     if (!res.ok) { setLoginError('Invalid credentials'); return; }
                     const data = await res.json();
                     setUser(data);
+                    if (data.username === 'stasy') {
+                        setShowHearts(true);
+                        setTimeout(() => setShowHearts(false), 3000);
+                    }
                 } catch { setLoginError('Connection error'); }
             };
 
@@ -415,7 +420,7 @@
                     </div>
 
                     {showAdmin && <AdminPanel onClose={() => setShowAdmin(false)} />}
-                    {user.username === 'stasy' && <HeartRain />}
+                    {showHearts && <HeartRain />}
 
                     <div className="relative bg-zinc-800 p-8 rounded-[4.5rem] tv-frame border-b-[16px] border-r-[12px] border-black max-w-5xl w-full aspect-[4/3] flex">
 
