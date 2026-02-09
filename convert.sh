@@ -28,7 +28,7 @@ find . \( -name "*.mkv" -o -name "*.avi" \) -type f -print0 | while IFS= read -r
 
         # Используем ffprobe, чтобы найти индекс английской дорожки
         # Ищем по тегу language=eng или по названию (title) содержащему English
-        track_index=$(ffprobe -v error -select_streams a -show_entries stream=index:tag=language,title -of csv=p=0 "$source_file" | \
+        track_index=$(ffprobe -v error -select_streams a -show_entries stream=index:stream_tags=language,title -of csv=p=0 "$source_file" | \
             grep -iE "eng|english|orig" | head -n 1 | cut -d',' -f1)
 
         # Если дорожка не найдена, используем первую (индекс 0 в потоках аудио, т.е. 0:a:0)
