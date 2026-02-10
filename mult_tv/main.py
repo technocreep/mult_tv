@@ -4,6 +4,7 @@ import sqlite3
 import secrets
 import time
 import bcrypt
+import httpx
 from datetime import datetime, timedelta
 from fastapi import FastAPI, HTTPException, Request, Response
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
@@ -16,6 +17,7 @@ VIDEO_DIR = "/downloads"
 DB_PATH = "/app/data/history.db"
 STATIC_DIR = "/app/static"
 SESSION_MAX_AGE_DAYS = 30
+TRANSMISSION_URL = "http://transmission:9091"
 
 # --- Security headers ---
 
@@ -459,6 +461,32 @@ async def list_videos(request: Request):
                 size_mb = round(os.path.getsize(full_path) / (1024 * 1024), 1)
                 videos.append({"name": file, "path": rel_path, "size_mb": size_mb})
     return videos
+
+# --- Transmission proxy ---
+
+@app.api_route("/transmission/{path:path}", methods=["GET", "POST", "PUT", "DELETE"])
+async def proxy_transmission(path: str, request: Request):
+    require_admin(request)
+    url = f"{TRANSMISSION_URL}/transmission/{path}"
+    headers = {}
+    for key, val in request.headers.items():
+        if key.lower() not in ("host", "cookie", "connection"):
+            headers[key] = val
+    body = await request.body()
+    async with httpx.AsyncClient() as client:
+        resp = await client.request(
+            method=request.method,
+            url=url,
+            headers=headers,
+            content=body,
+            params=dict(request.query_params),
+            follow_redirects=True,
+        )
+    resp_headers = {}
+    for key, val in resp.headers.items():
+        if key.lower() not in ("transfer-encoding", "content-encoding", "connection"):
+            resp_headers[key] = val
+    return Response(content=resp.content, status_code=resp.status_code, headers=resp_headers)
 
 # --- Страницы ---
 
