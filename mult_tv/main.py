@@ -18,6 +18,8 @@ DB_PATH = "/app/data/history.db"
 STATIC_DIR = "/app/static"
 SESSION_MAX_AGE_DAYS = 30
 TRANSMISSION_URL = "http://transmission:9091"
+TRANSMISSION_USER = os.environ.get("TRANSMISSION_USER", "admin")
+TRANSMISSION_PASS = os.environ.get("TRANSMISSION_PASS", "")
 
 # --- Security headers ---
 
@@ -470,21 +472,27 @@ async def proxy_transmission(path: str, request: Request):
     url = f"{TRANSMISSION_URL}/transmission/{path}"
     headers = {}
     for key, val in request.headers.items():
-        if key.lower() not in ("host", "cookie", "connection"):
+        if key.lower() not in ("host", "cookie", "connection", "accept-encoding"):
             headers[key] = val
     body = await request.body()
-    async with httpx.AsyncClient() as client:
-        resp = await client.request(
-            method=request.method,
-            url=url,
-            headers=headers,
-            content=body,
-            params=dict(request.query_params),
-            follow_redirects=True,
-        )
+    try:
+        auth = httpx.BasicAuth(TRANSMISSION_USER, TRANSMISSION_PASS)
+        async with httpx.AsyncClient() as client:
+            resp = await client.request(
+                method=request.method,
+                url=url,
+                headers=headers,
+                content=body,
+                params=dict(request.query_params),
+                auth=auth,
+                follow_redirects=True,
+            )
+    except httpx.ConnectError:
+        raise HTTPException(status_code=502, detail="Transmission is not available")
+    skip = {"transfer-encoding", "content-encoding", "connection", "content-length"}
     resp_headers = {}
     for key, val in resp.headers.items():
-        if key.lower() not in ("transfer-encoding", "content-encoding", "connection"):
+        if key.lower() not in skip:
             resp_headers[key] = val
     return Response(content=resp.content, status_code=resp.status_code, headers=resp_headers)
 

@@ -20,6 +20,9 @@ services:
   web_tv:
     build: .
     container_name: mult_tv_app
+    environment:
+      - TRANSMISSION_USER=${TRANSMISSION_USER:-admin}
+      - TRANSMISSION_PASS=${TRANSMISSION_PASS}
     ports:
       - 80:8000
     volumes:
