@@ -23,11 +23,27 @@ services:
     environment:
       - TRANSMISSION_USER=${TRANSMISSION_USER:-admin}
       - TRANSMISSION_PASS=${TRANSMISSION_PASS}
-    ports:
-      - 80:8000
     volumes:
       - ./downloads:/downloads
       - ./app:/app/data
     restart: unless-stopped
     depends_on:
       - transmission
+
+  caddy:
+    image: caddy:2-alpine
+    container_name: caddy
+    ports:
+      - 80:80
+      - 443:443
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile
+      - caddy_data:/data
+      - caddy_config:/config
+    restart: unless-stopped
+    depends_on:
+      - web_tv
+
+volumes:
+  caddy_data:
+  caddy_config:

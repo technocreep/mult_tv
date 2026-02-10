@@ -1,0 +1,3 @@
+stasymult.ru {
+    reverse_proxy web_tv:8000
+}
