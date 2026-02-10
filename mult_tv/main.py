@@ -32,6 +32,9 @@ class ChangePasswordRequest(BaseModel):
 class MarkWatchedRequest(BaseModel):
     file_path: str
 
+class PlayRequest(BaseModel):
+    path: str
+
 # --- Утилиты для паролей ---
 
 def hash_password(password: str, salt: str = None):
@@ -328,6 +331,45 @@ async def delete_video(file_path: str, request: Request):
         raise HTTPException(status_code=404)
     os.remove(full_path)
     return {"ok": True}
+
+@app.get("/api/admin/browse")
+async def browse_files(request: Request, path: str = ""):
+    require_admin(request)
+    full_path = os.path.realpath(os.path.join(VIDEO_DIR, path))
+    if not full_path.startswith(os.path.realpath(VIDEO_DIR)):
+        raise HTTPException(status_code=403, detail="Access denied")
+    if not os.path.isdir(full_path):
+        raise HTTPException(status_code=404, detail="Directory not found")
+
+    folders = []
+    files = []
+    for entry in sorted(os.listdir(full_path)):
+        if entry.startswith('.'):
+            continue
+        entry_path = os.path.join(full_path, entry)
+        if os.path.isdir(entry_path):
+            folders.append(entry)
+        elif entry.lower().endswith('.mp4'):
+            rel = os.path.relpath(entry_path, VIDEO_DIR)
+            size_mb = round(os.path.getsize(entry_path) / (1024 * 1024), 1)
+            files.append({"name": entry, "path": rel, "size_mb": size_mb})
+
+    return {"current_path": path, "folders": folders, "files": files}
+
+@app.post("/api/admin/play")
+async def play_video(data: PlayRequest, request: Request):
+    require_admin(request)
+    full_path = os.path.realpath(os.path.join(VIDEO_DIR, data.path))
+    if not full_path.startswith(os.path.realpath(VIDEO_DIR)):
+        raise HTTPException(status_code=403, detail="Access denied")
+    if not os.path.isfile(full_path) or not data.path.lower().endswith('.mp4'):
+        raise HTTPException(status_code=404, detail="Video not found")
+
+    return {
+        "title": os.path.basename(full_path),
+        "url": f"/stream/{data.path}",
+        "file_path": data.path
+    }
 
 @app.get("/api/admin/videos")
 async def list_videos(request: Request):
