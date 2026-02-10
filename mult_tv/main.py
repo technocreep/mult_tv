@@ -1,8 +1,9 @@
 import os
 import random
 import sqlite3
-import hashlib
 import secrets
+import time
+import bcrypt
 from datetime import datetime, timedelta
 from fastapi import FastAPI, HTTPException, Request, Response
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
@@ -14,6 +15,55 @@ app = FastAPI()
 VIDEO_DIR = "/downloads"
 DB_PATH = "/app/data/history.db"
 STATIC_DIR = "/app/static"
+SESSION_MAX_AGE_DAYS = 30
+
+# --- Security headers ---
+
+@app.middleware("http")
+async def add_security_headers(request: Request, call_next):
+    response = await call_next(request)
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "DENY"
+    response.headers["X-XSS-Protection"] = "1; mode=block"
+    response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+    return response
+
+# --- Rate limiter ---
+
+login_attempts = {}  # IP -> (count, first_attempt_time)
+RATE_LIMIT_MAX = 5
+RATE_LIMIT_WINDOW = 300  # 5 минут
+
+def check_rate_limit(ip: str):
+    now = time.time()
+    if ip in login_attempts:
+        count, first_time = login_attempts[ip]
+        if now - first_time > RATE_LIMIT_WINDOW:
+            del login_attempts[ip]
+        elif count >= RATE_LIMIT_MAX:
+            raise HTTPException(status_code=429, detail="Too many login attempts. Try again later.")
+
+def record_failed_login(ip: str):
+    now = time.time()
+    if ip in login_attempts:
+        count, first_time = login_attempts[ip]
+        if now - first_time > RATE_LIMIT_WINDOW:
+            login_attempts[ip] = (1, now)
+        else:
+            login_attempts[ip] = (count + 1, first_time)
+    else:
+        login_attempts[ip] = (1, now)
+
+def clear_rate_limit(ip: str):
+    login_attempts.pop(ip, None)
+
+# --- Path traversal protection ---
+
+def safe_path(base_dir: str, user_path: str):
+    full = os.path.realpath(os.path.join(base_dir, user_path))
+    if not full.startswith(os.path.realpath(base_dir)):
+        raise HTTPException(status_code=403, detail="Access denied")
+    return full
 
 # --- Pydantic модели ---
 
@@ -37,15 +87,16 @@ class PlayRequest(BaseModel):
 
 # --- Утилиты для паролей ---
 
-def hash_password(password: str, salt: str = None):
-    if salt is None:
-        salt = secrets.token_hex(16)
-    password_hash = hashlib.sha256((salt + password).encode()).hexdigest()
-    return password_hash, salt
+def hash_password(password: str):
+    return bcrypt.hashpw(password.encode(), bcrypt.gensalt()).decode()
 
-def verify_password(password: str, password_hash: str, salt: str):
-    check_hash = hashlib.sha256((salt + password).encode()).hexdigest()
-    return check_hash == password_hash
+def verify_password(password: str, stored_hash: str, salt: str = ""):
+    if stored_hash.startswith("$2b$") or stored_hash.startswith("$2a$"):
+        return bcrypt.checkpw(password.encode(), stored_hash.encode())
+    # Fallback для старых SHA-256 хешей (миграция)
+    import hashlib
+    check = hashlib.sha256((salt + password).encode()).hexdigest()
+    return check == stored_hash
 
 # --- Инициализация БД ---
 
@@ -72,7 +123,7 @@ def init_db():
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             username TEXT UNIQUE NOT NULL,
             password_hash TEXT NOT NULL,
-            salt TEXT NOT NULL,
+            salt TEXT NOT NULL DEFAULT '',
             role TEXT DEFAULT 'user',
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
@@ -89,11 +140,13 @@ def init_db():
     # Создаём дефолтного админа если нет ни одного пользователя
     cursor.execute('SELECT COUNT(*) FROM users')
     if cursor.fetchone()[0] == 0:
-        pw_hash, salt = hash_password("admin")
+        default_pw = secrets.token_urlsafe(12)
+        pw_hash = hash_password(default_pw)
         cursor.execute(
             'INSERT INTO users (username, password_hash, salt, role) VALUES (?, ?, ?, ?)',
-            ("admin", pw_hash, salt, "admin")
+            ("admin", pw_hash, "", "admin")
         )
+        print(f"[INIT] Default admin password: {default_pw}")
 
     conn.commit()
     conn.close()
@@ -108,13 +161,25 @@ def get_current_user(request: Request):
         return None
     conn = get_db()
     row = conn.execute(
-        'SELECT u.id, u.username, u.role FROM sessions s JOIN users u ON s.user_id = u.id WHERE s.token = ?',
+        '''SELECT u.id, u.username, u.role, s.created_at as session_created
+           FROM sessions s JOIN users u ON s.user_id = u.id WHERE s.token = ?''',
         (token,)
     ).fetchone()
     conn.close()
-    if row:
-        return {"id": row["id"], "username": row["username"], "role": row["role"]}
-    return None
+    if not row:
+        return None
+    # Session expiry check
+    try:
+        created = datetime.fromisoformat(row["session_created"])
+        if datetime.now() - created > timedelta(days=SESSION_MAX_AGE_DAYS):
+            conn = get_db()
+            conn.execute('DELETE FROM sessions WHERE token = ?', (token,))
+            conn.commit()
+            conn.close()
+            return None
+    except (ValueError, TypeError):
+        pass
+    return {"id": row["id"], "username": row["username"], "role": row["role"]}
 
 def require_auth(request: Request):
     user = get_current_user(request)
@@ -131,7 +196,10 @@ def require_admin(request: Request):
 # --- Публичные эндпоинты ---
 
 @app.post("/api/login")
-async def login(data: LoginRequest, response: Response):
+async def login(data: LoginRequest, request: Request, response: Response):
+    ip = request.client.host if request.client else "unknown"
+    check_rate_limit(ip)
+
     conn = get_db()
     row = conn.execute(
         'SELECT id, username, password_hash, salt, role FROM users WHERE username = ?',
@@ -140,7 +208,19 @@ async def login(data: LoginRequest, response: Response):
 
     if not row or not verify_password(data.password, row["password_hash"], row["salt"]):
         conn.close()
+        record_failed_login(ip)
         raise HTTPException(status_code=401, detail="Invalid credentials")
+
+    clear_rate_limit(ip)
+
+    # Миграция старого SHA-256 хеша на bcrypt при успешном логине
+    if not row["password_hash"].startswith("$2b$") and not row["password_hash"].startswith("$2a$"):
+        new_hash = hash_password(data.password)
+        conn.execute('UPDATE users SET password_hash = ?, salt = ? WHERE id = ?', (new_hash, "", row["id"]))
+
+    # Очистка старых сессий
+    conn.execute('DELETE FROM sessions WHERE created_at < ?',
+                 (datetime.now() - timedelta(days=SESSION_MAX_AGE_DAYS),))
 
     token = secrets.token_hex(32)
     conn.execute('INSERT INTO sessions (token, user_id) VALUES (?, ?)', (token, row["id"]))
@@ -148,7 +228,7 @@ async def login(data: LoginRequest, response: Response):
     conn.close()
 
     response = JSONResponse({"username": row["username"], "role": row["role"]})
-    response.set_cookie("session_token", token, httponly=True, samesite="strict", max_age=30*24*3600)
+    response.set_cookie("session_token", token, httponly=True, samesite="strict", max_age=SESSION_MAX_AGE_DAYS*24*3600)
     return response
 
 @app.post("/api/logout")
@@ -218,14 +298,14 @@ async def get_random_video(request: Request, current_path: str = ""):
     return {
         "title": os.path.basename(chosen_video),
         "url": f"/stream/{rel_path}",
-        "file_path": chosen_video
+        "file_path": rel_path
     }
 
 @app.get("/stream/{file_path:path}")
 async def stream_video(file_path: str, request: Request):
     require_auth(request)
-    full_path = os.path.join(VIDEO_DIR, file_path)
-    if not os.path.exists(full_path):
+    full_path = safe_path(VIDEO_DIR, file_path)
+    if not os.path.isfile(full_path):
         raise HTTPException(status_code=404)
     return FileResponse(full_path)
 
@@ -260,12 +340,12 @@ async def create_user(data: CreateUserRequest, request: Request):
     require_admin(request)
     if data.role not in ("user", "admin"):
         raise HTTPException(status_code=400, detail="Role must be 'user' or 'admin'")
-    pw_hash, salt = hash_password(data.password)
+    pw_hash = hash_password(data.password)
     conn = get_db()
     try:
         conn.execute(
             'INSERT INTO users (username, password_hash, salt, role) VALUES (?, ?, ?, ?)',
-            (data.username, pw_hash, salt, data.role)
+            (data.username, pw_hash, "", data.role)
         )
         conn.commit()
     except sqlite3.IntegrityError:
@@ -289,9 +369,9 @@ async def delete_user(user_id: int, request: Request):
 @app.put("/api/admin/users/{user_id}/password")
 async def change_user_password(user_id: int, data: ChangePasswordRequest, request: Request):
     require_admin(request)
-    pw_hash, salt = hash_password(data.password)
+    pw_hash = hash_password(data.password)
     conn = get_db()
-    conn.execute('UPDATE users SET password_hash = ?, salt = ? WHERE id = ?', (pw_hash, salt, user_id))
+    conn.execute('UPDATE users SET password_hash = ?, salt = ? WHERE id = ?', (pw_hash, "", user_id))
     conn.execute('DELETE FROM sessions WHERE user_id = ?', (user_id,))
     conn.commit()
     conn.close()
@@ -326,8 +406,8 @@ async def reset_history(request: Request):
 @app.delete("/api/admin/videos/{file_path:path}")
 async def delete_video(file_path: str, request: Request):
     require_admin(request)
-    full_path = os.path.join(VIDEO_DIR, file_path)
-    if not os.path.exists(full_path):
+    full_path = safe_path(VIDEO_DIR, file_path)
+    if not os.path.isfile(full_path):
         raise HTTPException(status_code=404)
     os.remove(full_path)
     return {"ok": True}
@@ -335,9 +415,7 @@ async def delete_video(file_path: str, request: Request):
 @app.get("/api/admin/browse")
 async def browse_files(request: Request, path: str = ""):
     require_admin(request)
-    full_path = os.path.realpath(os.path.join(VIDEO_DIR, path))
-    if not full_path.startswith(os.path.realpath(VIDEO_DIR)):
-        raise HTTPException(status_code=403, detail="Access denied")
+    full_path = safe_path(VIDEO_DIR, path)
     if not os.path.isdir(full_path):
         raise HTTPException(status_code=404, detail="Directory not found")
 
@@ -359,9 +437,7 @@ async def browse_files(request: Request, path: str = ""):
 @app.post("/api/admin/play")
 async def play_video(data: PlayRequest, request: Request):
     require_admin(request)
-    full_path = os.path.realpath(os.path.join(VIDEO_DIR, data.path))
-    if not full_path.startswith(os.path.realpath(VIDEO_DIR)):
-        raise HTTPException(status_code=403, detail="Access denied")
+    full_path = safe_path(VIDEO_DIR, data.path)
     if not os.path.isfile(full_path) or not data.path.lower().endswith('.mp4'):
         raise HTTPException(status_code=404, detail="Video not found")
 

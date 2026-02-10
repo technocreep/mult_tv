@@ -6,8 +6,8 @@ services:
       - PUID=1000
       - PGID=1000
       - TZ=Europe/Moscow
-      - USER=admin
-      - PASS=admin1234
+      - USER=${TRANSMISSION_USER:-admin}
+      - PASS=${TRANSMISSION_PASS}
     volumes:
       - ./config:/config
       - ./downloads:/downloads
