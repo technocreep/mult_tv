@@ -189,7 +189,7 @@ async def get_random_video(request: Request, current_path: str = ""):
     all_files = []
     for root, dirs, files in os.walk(VIDEO_DIR):
         for file in files:
-            if file.lower().endswith('.mp4') or file.lower().endswith('.avi'):
+            if file.lower().endswith('.mp4'):
                 all_files.append(os.path.join(root, file))
 
     available_files = [f for f in all_files if f not in recently_watched]
