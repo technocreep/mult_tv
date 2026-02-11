@@ -257,9 +257,13 @@ async def me(request: Request):
 # --- Защищённые эндпоинты ---
 
 def get_top_folder(file_path):
-    """Возвращает имя папки верхнего уровня относительно VIDEO_DIR."""
+    """Возвращает имя папки-сериала относительно VIDEO_DIR.
+    Пропускает промежуточные папки complete/incomplete."""
     rel = os.path.relpath(file_path, VIDEO_DIR)
     parts = rel.split(os.sep)
+    # Пропускаем complete/incomplete — это служебные папки Transmission
+    if len(parts) > 2 and parts[0] in ('complete', 'incomplete'):
+        return parts[1]
     return parts[0] if len(parts) > 1 else ""
 
 @app.get("/api/get_random")
