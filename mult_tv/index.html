@@ -425,7 +425,7 @@
                 }
             }, [glitchDone, fetchDone, pendingVideo]);
 
-            const getNext = async () => {
+            const fetchRandom = async (sameFolder = false) => {
                 if (!isOn || turningOff) return;
                 setSwitching(true);
                 setGlitchDone(false);
@@ -433,7 +433,8 @@
                 setPendingVideo(null);
                 setError(null);
                 try {
-                    const params = video?.file_path ? `?current_path=${encodeURIComponent(video.file_path)}` : '';
+                    let params = video?.file_path ? `?current_path=${encodeURIComponent(video.file_path)}` : '';
+                    if (sameFolder && params) params += '&same_folder=true';
                     const res = await fetch('/api/get_random' + params);
                     if (res.status === 401) { setUser(null); return; }
                     const data = await res.json();
@@ -449,6 +450,9 @@
                     setSwitching(false);
                 }
             };
+
+            const getNext = () => fetchRandom(false);
+            const getContinue = () => fetchRandom(true);
 
             const togglePower = () => {
                 if (!isOn) {
@@ -555,7 +559,7 @@
                                     ref={videoRef}
                                     src={video.url}
                                     autoPlay
-                                    onEnded={getNext}
+                                    onEnded={getContinue}
                                     onTimeUpdate={handleTimeUpdate}
                                     className="w-full h-full object-cover"
                                     onLoadedData={(e) => e.target.volume = 1.0}

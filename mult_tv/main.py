@@ -263,7 +263,7 @@ def get_top_folder(file_path):
     return parts[0] if len(parts) > 1 else ""
 
 @app.get("/api/get_random")
-async def get_random_video(request: Request, current_path: str = ""):
+async def get_random_video(request: Request, current_path: str = "", same_folder: bool = False):
     require_auth(request)
 
     conn = get_db()
@@ -279,23 +279,35 @@ async def get_random_video(request: Request, current_path: str = ""):
             if file.lower().endswith('.mp4'):
                 all_files.append(os.path.join(root, file))
 
-    available_files = [f for f in all_files if f not in recently_watched]
-
-    if not available_files:
-        available_files = all_files if all_files else []
-
-    if not available_files:
+    if not all_files:
         conn.close()
         return {"error": "Папка загрузок пуста"}
 
-    # Исключаем файлы из текущей папки (переключаем шоу)
-    if current_path:
-        current_folder = get_top_folder(current_path)
-        other_folder_files = [f for f in available_files if get_top_folder(f) != current_folder]
+    if current_path and same_folder:
+        # Автоплей: следующая серия из того же сериала
+        current_folder = get_top_folder(os.path.join(VIDEO_DIR, current_path))
+        folder_files = [f for f in all_files if get_top_folder(f) == current_folder]
+        available = [f for f in folder_files if f not in recently_watched]
+        if not available:
+            available = folder_files  # fallback: все серии папки
+        chosen_video = random.choice(available)
+    elif current_path:
+        # Кнопка «СЛЕД»: другой сериал
+        current_folder = get_top_folder(os.path.join(VIDEO_DIR, current_path))
+        available = [f for f in all_files if f not in recently_watched]
+        if not available:
+            available = all_files
+        other_folder_files = [f for f in available if get_top_folder(f) != current_folder]
         if other_folder_files:
-            available_files = other_folder_files
+            available = other_folder_files
+        chosen_video = random.choice(available)
+    else:
+        # Первый запуск
+        available = [f for f in all_files if f not in recently_watched]
+        if not available:
+            available = all_files
+        chosen_video = random.choice(available)
 
-    chosen_video = random.choice(available_files)
     conn.close()
 
     rel_path = os.path.relpath(chosen_video, VIDEO_DIR)
