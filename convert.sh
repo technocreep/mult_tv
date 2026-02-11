@@ -1,10 +1,21 @@
 #!/bin/bash
 
-# Путь к папке с завершенными загрузками
-BASE_DIR="/root/mult_tv/mult_tv/downloads/complete"
+# Использование:
+#   ./convert.sh [директория] [язык]
+#
+# Примеры:
+#   ./convert.sh                                              # по умолчанию: english
+#   ./convert.sh /path/to/videos "rus|russian"                # русская дорожка
+#   ./convert.sh /path/to/videos "eng|english|orig"           # английская дорожка
+
+BASE_DIR="${1:-/root/mult_tv/mult_tv/downloads/complete}"
+LANG_FILTER="${2:-eng|english|orig}"
+
 cd "$BASE_DIR" || exit
 
 echo "--- Запуск умного сканирования аудиодорожек ---"
+echo "Директория: $BASE_DIR"
+echo "Фильтр языка: $LANG_FILTER"
 
 find . \( -name "*.mkv" -o -name "*.avi" \) -type f -print0 | while IFS= read -r -d '' source_file; do
     # Формируем имя mp4-файла (заменяем расширение)
@@ -26,14 +37,13 @@ find . \( -name "*.mkv" -o -name "*.avi" \) -type f -print0 | while IFS= read -r
             echo "Кодек $video_codec — перекодирование в h264."
         fi
 
-        # Используем ffprobe, чтобы найти индекс английской дорожки
-        # Ищем по тегу language=eng или по названию (title) содержащему English
+        # Ищем аудиодорожку по заданному языку
         track_index=$(ffprobe -v error -select_streams a -show_entries stream=index:stream_tags=language,title -of csv=p=0 "$source_file" | \
-            grep -iE "eng|english|orig" | head -n 1 | cut -d',' -f1)
+            grep -iE "$LANG_FILTER" | head -n 1 | cut -d',' -f1)
 
-        # Если дорожка не найдена, используем первую (индекс 0 в потоках аудио, т.е. 0:a:0)
+        # Если дорожка не найдена, используем первую
         if [ -z "$track_index" ]; then
-            echo "Английская дорожка не найдена, использую первую доступную."
+            echo "Дорожка ($LANG_FILTER) не найдена, использую первую доступную."
             map_audio="0:a:0"
         else
             echo "Найдена подходящая дорожка (индекс $track_index)."
@@ -42,9 +52,6 @@ find . \( -name "*.mkv" -o -name "*.avi" \) -type f -print0 | while IFS= read -r
 
         echo "Конвертирую в MP4..."
 
-        # Конвертация:
-        # -map 0:v:0 (видео)
-        # -map $map_audio (выбранное аудио)
         ffmpeg -nostdin -i "$source_file" \
             -map 0:v:0 -map "$map_audio" \
             $video_opts -c:a aac -ac 2 -b:a 192k \
@@ -61,5 +68,5 @@ find . \( -name "*.mkv" -o -name "*.avi" \) -type f -print0 | while IFS= read -r
     fi
 done
 
-chmod -R 777 /root/mult_tv/downloads
+chmod -R 755 /root/mult_tv/downloads
 echo "--- Все операции завершены ---"
