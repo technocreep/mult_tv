@@ -89,6 +89,10 @@ class MarkWatchedRequest(BaseModel):
 class PlayRequest(BaseModel):
     path: str
 
+class ReportRequest(BaseModel):
+    file_path: str
+    comment: str
+
 # --- Утилиты для паролей ---
 
 def hash_password(password: str):
@@ -137,6 +141,16 @@ def init_db():
         CREATE TABLE IF NOT EXISTS sessions (
             token TEXT PRIMARY KEY,
             user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    ''')
+
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS reports (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+            file_path TEXT NOT NULL,
+            comment TEXT NOT NULL,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
     ''')
@@ -345,6 +359,18 @@ async def mark_watched(data: MarkWatchedRequest, request: Request):
     conn.close()
     return {"ok": True}
 
+@app.post("/api/report")
+async def create_report(data: ReportRequest, request: Request):
+    user = require_auth(request)
+    conn = get_db()
+    conn.execute(
+        'INSERT INTO reports (user_id, file_path, comment, created_at) VALUES (?, ?, ?, ?)',
+        (user["id"], data.file_path, data.comment, datetime.now())
+    )
+    conn.commit()
+    conn.close()
+    return {"ok": True}
+
 # --- Админские эндпоинты ---
 
 @app.get("/api/admin/users")
@@ -479,6 +505,28 @@ async def list_videos(request: Request):
                 size_mb = round(os.path.getsize(full_path) / (1024 * 1024), 1)
                 videos.append({"name": file, "path": rel_path, "size_mb": size_mb})
     return videos
+
+@app.get("/api/admin/reports")
+async def list_reports(request: Request):
+    require_admin(request)
+    conn = get_db()
+    rows = conn.execute('''
+        SELECT r.id, r.file_path, r.comment, r.created_at, u.username
+        FROM reports r
+        JOIN users u ON r.user_id = u.id
+        ORDER BY r.created_at DESC
+    ''').fetchall()
+    conn.close()
+    return [dict(row) for row in rows]
+
+@app.delete("/api/admin/reports/{report_id}")
+async def delete_report(report_id: int, request: Request):
+    require_admin(request)
+    conn = get_db()
+    conn.execute('DELETE FROM reports WHERE id = ?', (report_id,))
+    conn.commit()
+    conn.close()
+    return {"ok": True}
 
 # --- Transmission proxy ---
 

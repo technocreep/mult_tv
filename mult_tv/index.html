@@ -71,6 +71,7 @@
             const [tab, setTab] = useState('users');
             const [users, setUsers] = useState([]);
             const [videos, setVideos] = useState([]);
+            const [reports, setReports] = useState([]);
             const [stats, setStats] = useState(null);
             const [newUser, setNewUser] = useState('');
             const [newPass, setNewPass] = useState('');
@@ -86,12 +87,16 @@
                 const res = await fetch('/api/admin/videos');
                 setVideos(await res.json());
             };
+            const loadReports = async () => {
+                const res = await fetch('/api/admin/reports');
+                setReports(await res.json());
+            };
             const loadStats = async () => {
                 const res = await fetch('/api/admin/stats');
                 setStats(await res.json());
             };
 
-            useEffect(() => { loadUsers(); loadStats(); }, []);
+            useEffect(() => { loadUsers(); loadStats(); loadReports(); }, []);
             useEffect(() => { if (tab === 'content') loadVideos(); }, [tab]);
 
             const addUser = async (e) => {
@@ -155,10 +160,10 @@
 
                         {/* Tabs */}
                         <div className="flex border-b border-zinc-800">
-                            {['users', 'content'].map(t => (
+                            {['users', 'content', 'reports'].map(t => (
                                 <button key={t} onClick={() => setTab(t)}
                                     className={`flex-1 py-3 text-xs uppercase tracking-widest font-bold transition-colors ${tab === t ? 'text-white border-b-2 border-red-600' : 'text-zinc-600 hover:text-zinc-400'}`}>
-                                    {t === 'users' ? 'Users' : 'Content'}
+                                    {t === 'users' ? 'Users' : t === 'content' ? 'Content' : 'Reports'}
                                 </button>
                             ))}
                         </div>
@@ -239,6 +244,38 @@
                                     {videos.length === 0 && (
                                         <div className="text-zinc-600 text-sm text-center py-8">No videos found</div>
                                     )}
+                                </div>
+                            )}
+
+                            {tab === 'reports' && (
+                                <div className="space-y-4">
+                                    {reports.length === 0 && (
+                                        <div className="text-zinc-600 text-sm text-center py-8">No reports yet</div>
+                                    )}
+
+                                    {reports.map(r => (
+                                        <div key={r.id} className="bg-zinc-800 rounded-lg px-4 py-3 space-y-2">
+                                            <div className="flex items-center justify-between">
+                                                <div className="flex items-center gap-2">
+                                                    <span className="text-zinc-500 text-[9px] uppercase tracking-widest">
+                                                        {new Date(r.created_at).toLocaleString('ru-RU')}
+                                                    </span>
+                                                    <span className="text-zinc-600">•</span>
+                                                    <span className="text-zinc-400 text-xs font-bold">{r.username}</span>
+                                                </div>
+                                                <button onClick={() => {
+                                                    if (confirm('Delete this report?')) {
+                                                        fetch(`/api/admin/reports/${r.id}`, {method: 'DELETE'})
+                                                            .then(() => loadReports());
+                                                    }
+                                                }} className={btnDanger + " text-[10px] py-1 px-2"}>
+                                                    Delete
+                                                </button>
+                                            </div>
+                                            <div className="text-white text-sm truncate">{r.file_path}</div>
+                                            <div className="text-zinc-300 text-sm whitespace-pre-wrap">{r.comment}</div>
+                                        </div>
+                                    ))}
                                 </div>
                             )}
                         </div>
@@ -335,6 +372,67 @@
             );
         };
 
+        // --- Модал отчёта ---
+        const ReportModal = ({ video, onClose }) => {
+            const [comment, setComment] = useState('');
+            const [sending, setSending] = useState(false);
+
+            const handleSubmit = async (e) => {
+                e.preventDefault();
+                if (!comment.trim()) return;
+                setSending(true);
+                try {
+                    await fetch('/api/report', {
+                        method: 'POST',
+                        headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify({
+                            file_path: video.file_path,
+                            comment: comment.trim()
+                        })
+                    });
+                    onClose();
+                } catch (err) {
+                    alert('Failed to submit report');
+                }
+                setSending(false);
+            };
+
+            return (
+                <div className="fixed inset-0 z-[100] bg-black/80 flex items-center justify-center p-4" onClick={onClose}>
+                    <div className="bg-zinc-900 border border-zinc-800 rounded-2xl w-full max-w-md flex flex-col" onClick={e => e.stopPropagation()}>
+                        <div className="flex items-center justify-between p-5 border-b border-zinc-800">
+                            <h2 className="text-zinc-400 text-xs tracking-[0.4em] font-bold uppercase">Report Issue</h2>
+                            <button onClick={onClose} className="text-zinc-600 hover:text-white text-xl">&times;</button>
+                        </div>
+
+                        <form onSubmit={handleSubmit} className="p-5 space-y-4">
+                            <div>
+                                <div className="text-zinc-500 text-[10px] uppercase tracking-widest mb-2">Video:</div>
+                                <div className="text-white text-sm truncate">{video?.title || 'Unknown'}</div>
+                            </div>
+
+                            <textarea
+                                placeholder="Describe the issue (e.g., poor quality, won't play, etc.)"
+                                value={comment}
+                                onChange={e => setComment(e.target.value)}
+                                className="w-full bg-black border border-zinc-700 rounded-lg py-3 px-4 text-white text-sm outline-none focus:border-red-600 transition-colors min-h-[120px] resize-y"
+                                autoFocus
+                            />
+
+                            <div className="flex gap-2 justify-end">
+                                <button type="button" onClick={onClose} className="text-zinc-500 text-xs uppercase tracking-widest hover:text-white transition-colors px-4 py-2">
+                                    Cancel
+                                </button>
+                                <button type="submit" disabled={!comment.trim() || sending} className="bg-zinc-100 text-black font-bold py-2 px-6 rounded-lg hover:bg-white transition-all active:scale-95 uppercase tracking-widest text-xs disabled:opacity-50 disabled:cursor-not-allowed">
+                                    Submit
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            );
+        };
+
         // --- Основное приложение ---
         const App = () => {
             const [user, setUser] = useState(null);
@@ -353,6 +451,7 @@
             const [showAdmin, setShowAdmin] = useState(false);
             const [showHearts, setShowHearts] = useState(false);
             const [showFilePicker, setShowFilePicker] = useState(false);
+            const [showReportModal, setShowReportModal] = useState(false);
             const videoRef = useRef(null);
             const markedWatched = useRef(false);
 
@@ -529,6 +628,11 @@
                     {/* Верхняя панель: юзер + logout + admin */}
                     <div className="absolute top-4 right-6 flex items-center gap-4 z-[60]">
                         <span className="text-zinc-600 text-[9px] uppercase tracking-widest">{user.username}</span>
+                        {isOn && video && (
+                            <button onClick={() => setShowReportModal(true)} className="text-zinc-500 text-[9px] uppercase tracking-widest hover:text-white transition-colors border border-zinc-800 px-3 py-1 rounded-lg">
+                                Report
+                            </button>
+                        )}
                         {user.role === 'admin' && (
                             <>
                                 <button onClick={() => setShowFilePicker(true)} className="text-zinc-500 text-[9px] uppercase tracking-widest hover:text-white transition-colors border border-zinc-800 px-3 py-1 rounded-lg">
@@ -546,6 +650,7 @@
 
                     {showAdmin && <AdminPanel onClose={() => setShowAdmin(false)} />}
                     {showFilePicker && <FilePicker onSelect={handleSelectVideo} onClose={() => setShowFilePicker(false)} />}
+                    {showReportModal && video && <ReportModal video={video} onClose={() => setShowReportModal(false)} />}
                     {showHearts && <HeartRain />}
 
                     <div className="relative tv-shadow" style={{maxWidth: '800px', width: '100%', aspectRatio: '885/708'}}>
