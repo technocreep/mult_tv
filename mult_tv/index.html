@@ -452,6 +452,7 @@
             const [showHearts, setShowHearts] = useState(false);
             const [showFilePicker, setShowFilePicker] = useState(false);
             const [showReportModal, setShowReportModal] = useState(false);
+            const [shows, setShows] = useState([]);
             const videoRef = useRef(null);
             const markedWatched = useRef(false);
 
@@ -472,7 +473,10 @@
                 fetch('/api/me').then(r => {
                     if (r.ok) return r.json();
                     throw new Error();
-                }).then(data => setUser(data))
+                }).then(data => {
+                    setUser(data);
+                    fetch('/api/shows').then(r => r.json()).then(setShows).catch(() => {});
+                })
                   .catch(() => {})
                   .finally(() => setLoading(false));
             }, []);
@@ -489,6 +493,7 @@
                     if (!res.ok) { setLoginError('Invalid credentials'); return; }
                     const data = await res.json();
                     setUser(data);
+                    fetch('/api/shows').then(r => r.json()).then(setShows).catch(() => {});
                     if (data.username === 'stasy') {
                         setShowHearts(true);
                         setTimeout(() => setShowHearts(false), 3000);
@@ -552,6 +557,30 @@
 
             const getNext = () => fetchRandom(false);
             const getContinue = () => fetchRandom(true);
+
+            const fetchByShow = async (showName) => {
+                if (!isOn) setIsOn(true);
+                setSwitching(true);
+                setGlitchDone(false);
+                setFetchDone(false);
+                setPendingVideo(null);
+                setError(null);
+                try {
+                    const res = await fetch('/api/get_random?show=' + encodeURIComponent(showName));
+                    if (res.status === 401) { setUser(null); return; }
+                    const data = await res.json();
+                    if (data.error) {
+                        setError(data.error);
+                        setSwitching(false);
+                    } else {
+                        setPendingVideo(data);
+                        setFetchDone(true);
+                    }
+                } catch (e) {
+                    setError("Server connection error");
+                    setSwitching(false);
+                }
+            };
 
             const togglePower = () => {
                 if (!isOn) {
@@ -653,79 +682,98 @@
                     {showReportModal && video && <ReportModal video={video} onClose={() => setShowReportModal(false)} />}
                     {showHearts && <HeartRain />}
 
-                    <div className="relative tv-shadow" style={{maxWidth: '800px', width: '100%', aspectRatio: '885/708'}}>
+                    <div className="flex items-center gap-6" style={{maxWidth: '1100px', width: '100%'}}>
+                        {/* Список сериалов слева */}
+                        {isOn && shows.length > 0 && (
+                            <div className="hidden lg:flex flex-col gap-1 w-48 shrink-0 max-h-[500px] overflow-y-auto pr-2">
+                                {shows.map(s => (
+                                    <button key={s} onClick={() => fetchByShow(s)}
+                                        className={`text-left text-[10px] leading-tight py-1.5 px-2 rounded transition-all truncate ${
+                                            video?.show === s
+                                                ? 'text-zinc-400 bg-zinc-800/50'
+                                                : 'text-zinc-700 hover:text-zinc-400 hover:bg-zinc-800/30'
+                                        }`}
+                                        title={s}>
+                                        {s}
+                                    </button>
+                                ))}
+                            </div>
+                        )}
 
-                        {/* Видео слой — под вырез экрана */}
-                        <div className="absolute overflow-hidden bg-black flex items-center justify-center z-[1]" style={{top:'9.9%', left:'15.8%', right:'15.3%', bottom:'26.6%', borderRadius:'4px'}}>
+                        <div className="relative tv-shadow flex-1" style={{maxWidth: '800px', width: '100%', aspectRatio: '885/708'}}>
 
-                            {/* Основное видео (серия) */}
-                            {isOn && video && !switching ? (
-                                <video
-                                    ref={videoRef}
-                                    src={video.url}
-                                    autoPlay
-                                    onEnded={getContinue}
-                                    onTimeUpdate={handleTimeUpdate}
-                                    className="w-full h-full object-cover"
-                                    onLoadedData={(e) => e.target.volume = 1.0}
-                                />
-                            ) : null}
+                            {/* Видео слой — под вырез экрана */}
+                            <div className="absolute overflow-hidden bg-black flex items-center justify-center z-[1]" style={{top:'9.9%', left:'15.8%', right:'15.3%', bottom:'26.6%', borderRadius:'4px'}}>
 
-                            {/* Glitch-эффект при переключении серий */}
-                            {isOn && switching && (
-                                <video
-                                    src="/static/assets/glitch.mp4"
-                                    autoPlay
-                                    onEnded={() => setGlitchDone(true)}
-                                    className="absolute inset-0 w-full h-full object-cover z-20"
-                                    muted
-                                />
-                            )}
+                                {/* Основное видео (серия) */}
+                                {isOn && video && !switching ? (
+                                    <video
+                                        ref={videoRef}
+                                        src={video.url}
+                                        autoPlay
+                                        onEnded={getContinue}
+                                        onTimeUpdate={handleTimeUpdate}
+                                        className="w-full h-full object-cover"
+                                        onLoadedData={(e) => e.target.volume = 1.0}
+                                    />
+                                ) : null}
 
-                            {/* Эффект выключения ТВ */}
-                            {turningOff && (
-                                <video
-                                    src="/static/assets/turn_off.mp4"
-                                    autoPlay
-                                    onEnded={handleTurnOffEnd}
-                                    className="absolute inset-0 w-full h-full object-cover z-30"
-                                    muted
-                                />
-                            )}
+                                {/* Glitch-эффект при переключении серий */}
+                                {isOn && switching && (
+                                    <video
+                                        src="/static/assets/glitch.mp4"
+                                        autoPlay
+                                        onEnded={() => setGlitchDone(true)}
+                                        className="absolute inset-0 w-full h-full object-cover z-20"
+                                        muted
+                                    />
+                                )}
 
-                            {/* Сообщение об ошибке */}
-                            {error && isOn && !switching && (
-                                <div className="absolute z-40 text-zinc-500 text-[10px] uppercase tracking-widest text-center">
-                                    {error}
-                                </div>
-                            )}
+                                {/* Эффект выключения ТВ */}
+                                {turningOff && (
+                                    <video
+                                        src="/static/assets/turn_off.mp4"
+                                        autoPlay
+                                        onEnded={handleTurnOffEnd}
+                                        className="absolute inset-0 w-full h-full object-cover z-30"
+                                        muted
+                                    />
+                                )}
 
-                            {/* Если ТВ выключен */}
-                            {!isOn && <div className="absolute inset-0 bg-black z-50"></div>}
+                                {/* Сообщение об ошибке */}
+                                {error && isOn && !switching && (
+                                    <div className="absolute z-40 text-zinc-500 text-[10px] uppercase tracking-widest text-center">
+                                        {error}
+                                    </div>
+                                )}
+
+                                {/* Если ТВ выключен */}
+                                {!isOn && <div className="absolute inset-0 bg-black z-50"></div>}
+                            </div>
+
+                            {/* PNG телевизора поверх видео */}
+                            <img src="/static/assets/tv.png" className="relative z-[2] w-full h-full pointer-events-none select-none" draggable="false" style={{display:'block'}} />
+
+                            {/* Индикатор */}
+                            <div className={`absolute z-[3] rounded-full transition-all duration-500 ${isOn ? 'bg-red-500 shadow-[0_0_8px_red]' : 'bg-zinc-900'}`}
+                                 style={{top:'84.7%', left:'38.4%', width:'2.8%', height:'3.5%'}}></div>
+
+                            {/* Невидимые кнопки поверх нарисованных */}
+                            <button onClick={togglePower}
+                                    className="absolute z-[3] cursor-pointer opacity-0 hover:opacity-100 hover:bg-white/10 rounded transition-all active:scale-95"
+                                    style={{top:'83.3%', left:'27.1%', width:'5.1%', height:'6.4%'}}
+                                    title="ВКЛ" />
+                            <button onClick={getNext}
+                                    disabled={!isOn || switching}
+                                    className="absolute z-[3] cursor-pointer opacity-0 hover:opacity-100 hover:bg-white/10 rounded transition-all active:scale-95"
+                                    style={{top:'83.3%', left:'54.2%', width:'4.5%', height:'6.4%'}}
+                                    title="СЛЕД" />
+                            <button onClick={toggleFullscreen}
+                                    disabled={!isOn || !video || switching}
+                                    className="absolute z-[3] cursor-pointer opacity-0 hover:opacity-100 hover:bg-white/10 rounded transition-all active:scale-95"
+                                    style={{top:'83.3%', left:'67.8%', width:'5.1%', height:'6.4%'}}
+                                    title="ФУЛ" />
                         </div>
-
-                        {/* PNG телевизора поверх видео */}
-                        <img src="/static/assets/tv.png" className="relative z-[2] w-full h-full pointer-events-none select-none" draggable="false" style={{display:'block'}} />
-
-                        {/* Индикатор */}
-                        <div className={`absolute z-[3] rounded-full transition-all duration-500 ${isOn ? 'bg-red-500 shadow-[0_0_8px_red]' : 'bg-zinc-900'}`}
-                             style={{top:'84.7%', left:'38.4%', width:'2.8%', height:'3.5%'}}></div>
-
-                        {/* Невидимые кнопки поверх нарисованных */}
-                        <button onClick={togglePower}
-                                className="absolute z-[3] cursor-pointer opacity-0 hover:opacity-100 hover:bg-white/10 rounded transition-all active:scale-95"
-                                style={{top:'83.3%', left:'27.1%', width:'5.1%', height:'6.4%'}}
-                                title="ВКЛ" />
-                        <button onClick={getNext}
-                                disabled={!isOn || switching}
-                                className="absolute z-[3] cursor-pointer opacity-0 hover:opacity-100 hover:bg-white/10 rounded transition-all active:scale-95"
-                                style={{top:'83.3%', left:'54.2%', width:'4.5%', height:'6.4%'}}
-                                title="СЛЕД" />
-                        <button onClick={toggleFullscreen}
-                                disabled={!isOn || !video || switching}
-                                className="absolute z-[3] cursor-pointer opacity-0 hover:opacity-100 hover:bg-white/10 rounded transition-all active:scale-95"
-                                style={{top:'83.3%', left:'67.8%', width:'5.1%', height:'6.4%'}}
-                                title="ФУЛ" />
                     </div>
 
                     {/* Инфо-строка */}

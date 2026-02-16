@@ -8,7 +8,8 @@ RUN pip install --no-cache-dir fastapi uvicorn starlette python-multipart bcrypt
 RUN mkdir -p /app/static /app/data
 
 # Копируем код
-COPY main.py .
+COPY main.py config.py db.py auth.py models.py video.py ./
+COPY routes/ ./routes/
 COPY index.html ./static/
 COPY assets/ ./static/assets/
 
