@@ -784,10 +784,10 @@
                         <div className="hidden lg:flex flex-col gap-1 w-48 shrink-0 max-h-[500px] overflow-y-auto pr-2">
                             {isOn && shows.map(s => (
                                 <button key={s} onClick={() => fetchByShow(s)}
-                                    className={`text-left text-[10px] leading-tight py-1.5 px-2 rounded transition-all truncate ${
+                                    className={`text-left text-[10px] leading-tight py-1.5 px-2 rounded origin-left transition-all duration-300 ease-out truncate ${
                                         video?.show === s
-                                            ? 'text-zinc-400 bg-zinc-800/50'
-                                            : 'text-zinc-700 hover:text-zinc-400 hover:bg-zinc-800/30'
+                                            ? 'text-zinc-400 bg-zinc-800/50 scale-110'
+                                            : 'text-zinc-700 hover:text-zinc-400 hover:bg-zinc-800/30 hover:scale-110'
                                     }`}
                                     title={s}>
                                     {s}
