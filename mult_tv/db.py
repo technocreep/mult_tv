@@ -53,6 +53,19 @@ def init_db():
         )
     ''')
 
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS video_checks (
+            file_path TEXT PRIMARY KEY,
+            ok INTEGER NOT NULL DEFAULT 0,
+            errors TEXT DEFAULT '',
+            video_codec TEXT DEFAULT '',
+            audio_codec TEXT DEFAULT '',
+            duration REAL DEFAULT 0,
+            size_mb REAL DEFAULT 0,
+            checked_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    ''')
+
     # Создаём дефолтного админа если нет ни одного пользователя
     cursor.execute('SELECT COUNT(*) FROM users')
     if cursor.fetchone()[0] == 0:

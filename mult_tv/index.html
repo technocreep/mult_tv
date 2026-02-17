@@ -78,6 +78,9 @@
             const [newRole, setNewRole] = useState('user');
             const [changePwId, setChangePwId] = useState(null);
             const [changePwVal, setChangePwVal] = useState('');
+            const [checks, setChecks] = useState([]);
+            const [validating, setValidating] = useState(false);
+            const [validateSummary, setValidateSummary] = useState(null);
 
             const loadUsers = async () => {
                 const res = await fetch('/api/admin/users');
@@ -91,6 +94,23 @@
                 const res = await fetch('/api/admin/reports');
                 setReports(await res.json());
             };
+            const loadChecks = async () => {
+                const res = await fetch('/api/admin/checks');
+                const data = await res.json();
+                setChecks(data);
+                const ok = data.filter(c => c.ok).length;
+                setValidateSummary({total: data.length, ok_count: ok, error_count: data.length - ok});
+            };
+            const runValidate = async (mode) => {
+                setValidating(true);
+                try {
+                    const res = await fetch('/api/admin/validate?mode=' + mode);
+                    const data = await res.json();
+                    setChecks(data.results);
+                    setValidateSummary({total: data.total, ok_count: data.ok_count, error_count: data.error_count, checked_now: data.checked_now});
+                } catch {}
+                setValidating(false);
+            };
             const loadStats = async () => {
                 const res = await fetch('/api/admin/stats');
                 setStats(await res.json());
@@ -98,6 +118,7 @@
 
             useEffect(() => { loadUsers(); loadStats(); loadReports(); }, []);
             useEffect(() => { if (tab === 'content') loadVideos(); }, [tab]);
+            useEffect(() => { if (tab === 'health') loadChecks(); }, [tab]);
 
             const addUser = async (e) => {
                 e.preventDefault();
@@ -160,10 +181,10 @@
 
                         {/* Tabs */}
                         <div className="flex border-b border-zinc-800">
-                            {['users', 'content', 'reports'].map(t => (
+                            {['users', 'content', 'reports', 'health'].map(t => (
                                 <button key={t} onClick={() => setTab(t)}
                                     className={`flex-1 py-3 text-xs uppercase tracking-widest font-bold transition-colors ${tab === t ? 'text-white border-b-2 border-red-600' : 'text-zinc-600 hover:text-zinc-400'}`}>
-                                    {t === 'users' ? 'Users' : t === 'content' ? 'Content' : 'Reports'}
+                                    {t === 'users' ? 'Users' : t === 'content' ? 'Content' : t === 'reports' ? 'Reports' : 'Health'}
                                 </button>
                             ))}
                         </div>
@@ -276,6 +297,82 @@
                                             <div className="text-zinc-300 text-sm whitespace-pre-wrap">{r.comment}</div>
                                         </div>
                                     ))}
+                                </div>
+                            )}
+
+                            {tab === 'health' && (
+                                <div className="space-y-4">
+                                    <div className="flex gap-2 items-center">
+                                        <button onClick={() => runValidate('new')} disabled={validating} className={btnClass + " disabled:opacity-50"}>
+                                            {validating ? 'Checking...' : 'Check New'}
+                                        </button>
+                                        <button onClick={() => runValidate('all')} disabled={validating} className={btnDanger + " disabled:opacity-50"}>
+                                            {validating ? 'Checking...' : 'Recheck All'}
+                                        </button>
+                                    </div>
+
+                                    {validateSummary && (
+                                        <div className="flex gap-4">
+                                            <div className="bg-zinc-800 rounded-lg px-4 py-2 text-center flex-1">
+                                                <div className="text-white text-lg font-bold">{validateSummary.total}</div>
+                                                <div className="text-zinc-500 text-[9px] uppercase tracking-widest">Total</div>
+                                            </div>
+                                            <div className="bg-zinc-800 rounded-lg px-4 py-2 text-center flex-1">
+                                                <div className="text-green-400 text-lg font-bold">{validateSummary.ok_count}</div>
+                                                <div className="text-zinc-500 text-[9px] uppercase tracking-widest">OK</div>
+                                            </div>
+                                            <div className="bg-zinc-800 rounded-lg px-4 py-2 text-center flex-1">
+                                                <div className="text-red-400 text-lg font-bold">{validateSummary.error_count}</div>
+                                                <div className="text-zinc-500 text-[9px] uppercase tracking-widest">Errors</div>
+                                            </div>
+                                            {validateSummary.checked_now !== undefined && (
+                                                <div className="bg-zinc-800 rounded-lg px-4 py-2 text-center flex-1">
+                                                    <div className="text-zinc-300 text-lg font-bold">{validateSummary.checked_now}</div>
+                                                    <div className="text-zinc-500 text-[9px] uppercase tracking-widest">Checked</div>
+                                                </div>
+                                            )}
+                                        </div>
+                                    )}
+
+                                    {validating && (
+                                        <div className="text-zinc-500 text-sm text-center py-8">Validating videos with ffprobe...</div>
+                                    )}
+
+                                    {!validating && checks.length === 0 && (
+                                        <div className="text-zinc-600 text-sm text-center py-8">No checks yet. Press "Check New" to start.</div>
+                                    )}
+
+                                    {!validating && checks.filter(c => !c.ok).map(c => (
+                                        <div key={c.file_path} className="bg-red-950/50 border border-red-900/50 rounded-lg px-4 py-3 space-y-1">
+                                            <div className="flex items-center justify-between">
+                                                <div className="text-red-300 text-sm font-bold truncate flex-1 mr-2">{c.file_path}</div>
+                                                <button onClick={() => {
+                                                    if (confirm('Delete this file?')) {
+                                                        fetch(`/api/admin/videos/${c.file_path}`, {method: 'DELETE'})
+                                                            .then(() => loadChecks());
+                                                    }
+                                                }} className={btnDanger + " text-[10px] py-1 px-2 shrink-0"}>
+                                                    Delete
+                                                </button>
+                                            </div>
+                                            <div className="text-red-400 text-xs">{c.errors}</div>
+                                            <div className="text-zinc-500 text-[10px]">
+                                                {c.size_mb} MB | video: {c.video_codec || '—'} | audio: {c.audio_codec || '—'} | {c.duration}s
+                                            </div>
+                                        </div>
+                                    ))}
+
+                                    {!validating && checks.filter(c => c.ok).length > 0 && (
+                                        <div className="border-t border-zinc-800 pt-4">
+                                            <div className="text-zinc-600 text-[10px] uppercase tracking-widest mb-3">Passed ({checks.filter(c => c.ok).length})</div>
+                                            {checks.filter(c => c.ok).map(c => (
+                                                <div key={c.file_path} className="flex items-center justify-between py-1.5 px-2 text-zinc-500 text-xs">
+                                                    <span className="truncate flex-1 mr-2">{c.file_path}</span>
+                                                    <span className="shrink-0 text-[10px]">{c.video_codec}/{c.audio_codec} | {c.size_mb}MB</span>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    )}
                                 </div>
                             )}
                         </div>

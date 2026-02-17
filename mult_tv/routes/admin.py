@@ -4,7 +4,8 @@ from fastapi import APIRouter, HTTPException, Request
 from config import VIDEO_DIR
 from db import get_db
 from auth import require_admin, hash_password
-from video import safe_path
+from datetime import datetime
+from video import safe_path, get_all_videos_unfiltered, get_show_name, validate_video
 from models import CreateUserRequest, ChangePasswordRequest, PlayRequest
 
 router = APIRouter(prefix="/api/admin")
@@ -175,3 +176,77 @@ async def delete_report(report_id: int, request: Request):
     conn.commit()
     conn.close()
     return {"ok": True}
+
+
+@router.get("/checks")
+async def get_checks(request: Request):
+    require_admin(request)
+    conn = get_db()
+    rows = conn.execute(
+        'SELECT file_path, ok, errors, video_codec, audio_codec, duration, size_mb, checked_at '
+        'FROM video_checks ORDER BY ok ASC, file_path ASC'
+    ).fetchall()
+    conn.close()
+    return [dict(row) for row in rows]
+
+
+@router.get("/validate")
+async def validate_videos(request: Request, mode: str = "new"):
+    require_admin(request)
+    conn = get_db()
+
+    all_files = get_all_videos_unfiltered()
+
+    if mode == "all":
+        conn.execute('DELETE FROM video_checks')
+        conn.commit()
+        to_check = all_files
+    else:
+        checked = {row[0] for row in conn.execute('SELECT file_path FROM video_checks').fetchall()}
+        to_check = [f for f in all_files if os.path.relpath(f, "/downloads") not in checked]
+
+    results = []
+    for f in to_check:
+        rel_path = os.path.relpath(f, "/downloads")
+        check = validate_video(f)
+        conn.execute(
+            'INSERT OR REPLACE INTO video_checks '
+            '(file_path, ok, errors, video_codec, audio_codec, duration, size_mb, checked_at) '
+            'VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+            (
+                rel_path,
+                1 if check["ok"] else 0,
+                "; ".join(check["errors"]),
+                check["video_codec"],
+                check["audio_codec"],
+                check["duration"],
+                check["size_mb"],
+                datetime.now(),
+            )
+        )
+        results.append({
+            "file": rel_path,
+            "show": get_show_name(f),
+            **check,
+        })
+
+    conn.commit()
+
+    # Вернуть полную картину
+    all_rows = conn.execute(
+        'SELECT file_path, ok, errors, video_codec, audio_codec, duration, size_mb, checked_at '
+        'FROM video_checks ORDER BY ok ASC, file_path ASC'
+    ).fetchall()
+    conn.close()
+
+    all_checks = [dict(row) for row in all_rows]
+    ok_count = sum(1 for r in all_checks if r["ok"])
+    error_count = len(all_checks) - ok_count
+
+    return {
+        "checked_now": len(results),
+        "total": len(all_checks),
+        "ok_count": ok_count,
+        "error_count": error_count,
+        "results": all_checks,
+    }
