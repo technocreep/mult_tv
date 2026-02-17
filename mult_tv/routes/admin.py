@@ -205,10 +205,16 @@ async def validate_videos(request: Request, mode: str = "new"):
         checked = {row[0] for row in conn.execute('SELECT file_path FROM video_checks').fetchall()}
         to_check = [f for f in all_files if os.path.relpath(f, "/downloads") not in checked]
 
+    total_to_check = len(to_check)
+    print(f"[VALIDATE] Starting: {total_to_check} files to check (mode={mode})", flush=True)
+
     results = []
-    for f in to_check:
+    for i, f in enumerate(to_check, 1):
         rel_path = os.path.relpath(f, "/downloads")
         check = validate_video(f)
+        status = "OK " if check["ok"] else "ERR"
+        errors_str = f' — {"; ".join(check["errors"])}' if check["errors"] else ""
+        print(f"[VALIDATE] {i}/{total_to_check} {status} {rel_path}{errors_str}", flush=True)
         conn.execute(
             'INSERT OR REPLACE INTO video_checks '
             '(file_path, ok, errors, video_codec, audio_codec, duration, size_mb, checked_at) '
@@ -231,6 +237,10 @@ async def validate_videos(request: Request, mode: str = "new"):
         })
 
     conn.commit()
+
+    ok_now = sum(1 for r in results if r.get("ok"))
+    err_now = len(results) - ok_now
+    print(f"[VALIDATE] Done: {ok_now} ok, {err_now} errors", flush=True)
 
     # Вернуть полную картину
     all_rows = conn.execute(
