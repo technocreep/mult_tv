@@ -780,22 +780,20 @@
                     {showHearts && <HeartRain />}
 
                     <div className="flex items-center gap-6" style={{maxWidth: '1100px', width: '100%'}}>
-                        {/* Список сериалов слева */}
-                        {isOn && shows.length > 0 && (
-                            <div className="hidden lg:flex flex-col gap-1 w-48 shrink-0 max-h-[500px] overflow-y-auto pr-2">
-                                {shows.map(s => (
-                                    <button key={s} onClick={() => fetchByShow(s)}
-                                        className={`text-left text-[10px] leading-tight py-1.5 px-2 rounded transition-all truncate ${
-                                            video?.show === s
-                                                ? 'text-zinc-400 bg-zinc-800/50'
-                                                : 'text-zinc-700 hover:text-zinc-400 hover:bg-zinc-800/30'
-                                        }`}
-                                        title={s}>
-                                        {s}
+                        {/* Список сериалов слева — место зарезервировано всегда */}
+                        <div className="hidden lg:flex flex-col gap-1 w-48 shrink-0 max-h-[500px] overflow-y-auto pr-2">
+                            {isOn && shows.map(s => (
+                                <button key={s} onClick={() => fetchByShow(s)}
+                                    className={`text-left text-[10px] leading-tight py-1.5 px-2 rounded transition-all truncate ${
+                                        video?.show === s
+                                            ? 'text-zinc-400 bg-zinc-800/50'
+                                            : 'text-zinc-700 hover:text-zinc-400 hover:bg-zinc-800/30'
+                                    }`}
+                                    title={s}>
+                                    {s}
                                     </button>
                                 ))}
-                            </div>
-                        )}
+                        </div>
 
                         <div className="relative tv-shadow flex-1" style={{maxWidth: '800px', width: '100%', aspectRatio: '885/708'}}>
 
