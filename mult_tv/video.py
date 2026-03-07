@@ -24,16 +24,17 @@ def get_show_name(file_path):
 
 
 def get_blocked_files():
-    """Возвращает set файлов, не прошедших проверку."""
+    """Возвращает set файлов, исключённых из выдачи: не прошедших проверку или с репортом."""
     from db import get_db
     conn = get_db()
-    rows = conn.execute('SELECT file_path FROM video_checks WHERE ok = 0').fetchall()
+    failed = {row[0] for row in conn.execute('SELECT file_path FROM video_checks WHERE ok = 0').fetchall()}
+    reported = {row[0] for row in conn.execute('SELECT DISTINCT file_path FROM reports').fetchall()}
     conn.close()
-    return {row[0] for row in rows}
+    return failed | reported
 
 
 def get_all_videos():
-    """Собирает все mp4-файлы из VIDEO_DIR, исключая заблокированные."""
+    """Собирает все mp4-файлы из VIDEO_DIR, исключая заблокированные и репорты."""
     blocked = get_blocked_files()
     files = []
     for root, dirs, filenames in os.walk(VIDEO_DIR):
