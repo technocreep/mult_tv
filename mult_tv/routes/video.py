@@ -25,8 +25,8 @@ async def get_random_video(request: Request, current_path: str = "", same_folder
     conn = get_db()
     cursor = conn.cursor()
 
-    ten_days_ago = datetime.now() - timedelta(days=10)
-    cursor.execute('SELECT file_path FROM history WHERE watched_at > ?', (ten_days_ago,))
+    thirty_days_ago = datetime.now() - timedelta(days=30)
+    cursor.execute('SELECT file_path FROM history WHERE watched_at > ?', (thirty_days_ago,))
     recently_watched = [row[0] for row in cursor.fetchall()]
 
     all_files = get_all_videos()
