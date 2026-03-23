@@ -1,0 +1,672 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Поймай Какашку!</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: #0a0a1a;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 100vh;
+    font-family: 'Segoe UI', Arial, sans-serif;
+    overflow: hidden;
+    user-select: none;
+  }
+
+  #game-container {
+    position: relative;
+  }
+
+  canvas {
+    display: block;
+    border-radius: 12px;
+    box-shadow: 0 0 40px rgba(100, 100, 255, 0.3);
+  }
+
+  .overlay {
+    position: absolute;
+    top: 0; left: 0; right: 0; bottom: 0;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    background: rgba(5, 10, 30, 0.92);
+    border-radius: 12px;
+    color: white;
+    gap: 14px;
+  }
+
+  .hidden { display: none !important; }
+
+  .overlay h1 {
+    font-size: 32px;
+    text-align: center;
+    margin-bottom: 6px;
+    text-shadow: 0 0 20px rgba(255,200,100,0.8);
+  }
+
+  .overlay .subtitle {
+    font-size: 15px;
+    color: #aaa;
+    text-align: center;
+    line-height: 1.7;
+  }
+
+  .rules {
+    background: rgba(255,255,255,0.07);
+    border-radius: 8px;
+    padding: 14px 24px;
+    font-size: 15px;
+    line-height: 1.9;
+    text-align: center;
+  }
+
+  .btn {
+    background: linear-gradient(135deg, #e94560, #c0392b);
+    color: white;
+    border: none;
+    padding: 12px 36px;
+    font-size: 17px;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: transform 0.1s, box-shadow 0.1s;
+    box-shadow: 0 4px 15px rgba(233,69,96,0.4);
+  }
+
+  .btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(233,69,96,0.6);
+  }
+
+  .btn:active { transform: translateY(0); }
+
+  .btn-secondary {
+    background: linear-gradient(135deg, #2c3e6e, #1a2550);
+    box-shadow: 0 4px 15px rgba(44,62,110,0.4);
+  }
+
+  .btn-secondary:hover {
+    box-shadow: 0 6px 20px rgba(44,62,110,0.7);
+  }
+
+  #player-name {
+    padding: 10px 16px;
+    font-size: 16px;
+    border-radius: 6px;
+    border: 2px solid #2c3e6e;
+    background: rgba(255,255,255,0.08);
+    color: white;
+    outline: none;
+    text-align: center;
+    width: 220px;
+  }
+
+  #player-name:focus { border-color: #e94560; }
+
+  #leaderboard-list {
+    width: 340px;
+    max-height: 320px;
+    overflow-y: auto;
+  }
+
+  #leaderboard-list .lb-entry {
+    display: flex;
+    justify-content: space-between;
+    padding: 8px 16px;
+    border-radius: 6px;
+    margin: 4px 0;
+    font-size: 15px;
+  }
+
+  #leaderboard-list .lb-entry:nth-child(odd) {
+    background: rgba(255,255,255,0.05);
+  }
+
+  #leaderboard-list .lb-entry.gold { color: #ffd700; }
+  #leaderboard-list .lb-entry.silver { color: #c0c0c0; }
+  #leaderboard-list .lb-entry.bronze { color: #cd7f32; }
+
+  .btn-row {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+
+  .diff-label {
+    font-size: 13px;
+    color: rgba(255,255,255,0.45);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    margin-bottom: -6px;
+  }
+
+  .diff-picker {
+    display: flex;
+    gap: 8px;
+  }
+
+  .diff-btn {
+    padding: 9px 22px;
+    border-radius: 8px;
+    border: 2px solid rgba(255,255,255,0.12);
+    background: rgba(255,255,255,0.05);
+    color: rgba(255,255,255,0.45);
+    cursor: pointer;
+    font-size: 15px;
+    font-family: inherit;
+    transition: all 0.15s;
+    white-space: nowrap;
+  }
+
+  .diff-btn:hover { background: rgba(255,255,255,0.1); color: white; }
+
+  .diff-btn.selected.easy   { border-color: #4caf50; color: #4caf50; background: rgba(76,175,80,0.12); }
+  .diff-btn.selected.normal { border-color: #ffc107; color: #ffc107; background: rgba(255,193,7,0.12); }
+  .diff-btn.selected.hard   { border-color: #f44336; color: #f44336; background: rgba(244,67,54,0.12); }
+
+  .diff-hint {
+    font-size: 13px;
+    color: rgba(255,255,255,0.4);
+    text-align: center;
+    min-height: 18px;
+    transition: color 0.2s;
+  }
+
+  .lb-diff {
+    font-size: 11px;
+    padding: 2px 6px;
+    border-radius: 4px;
+    margin-left: 6px;
+    vertical-align: middle;
+    font-weight: bold;
+  }
+  .lb-diff.easy   { background: rgba(76,175,80,0.25);  color: #4caf50; }
+  .lb-diff.normal { background: rgba(255,193,7,0.25);  color: #ffc107; }
+  .lb-diff.hard   { background: rgba(244,67,54,0.25);  color: #f44336; }
+</style>
+</head>
+<body>
+
+<audio id="bgm" src="/static/game/music/main_theme.mp3" loop preload="auto"></audio>
+
+<div id="game-container">
+  <canvas id="canvas"></canvas>
+
+  <!-- ── START SCREEN ── -->
+  <div id="start-screen" class="overlay">
+    <h1>💩 Поймай Какашку!</h1>
+    <div class="rules">
+      <div>⬅️ ➡️ — передвигать персонажа</div>
+      <div>💩 — поймать: <strong>+10 очков</strong></div>
+      <div>❤️ — поймать: <strong>−1 жизнь</strong></div>
+      <div>5 пропущенных 💩 — конец игры</div>
+    </div>
+
+    <span class="diff-label">Уровень сложности</span>
+    <div class="diff-picker">
+      <button class="diff-btn easy"   onclick="selectDiff('easy')">🌿 Легко</button>
+      <button class="diff-btn normal selected" onclick="selectDiff('normal')">⚡ Нормально</button>
+      <button class="diff-btn hard"   onclick="selectDiff('hard')">🔥 Сложно</button>
+    </div>
+    <div class="diff-hint" id="diff-hint">10 жизней · обычная скорость</div>
+
+    <div class="btn-row">
+      <button class="btn" onclick="startGame()">▶ Играть</button>
+      <button class="btn btn-secondary" onclick="showLeaderboard()">🏆 Лидерборд</button>
+    </div>
+  </div>
+
+  <!-- ── GAME OVER SCREEN ── -->
+  <div id="gameover-screen" class="overlay hidden">
+    <h1>Игра окончена!</h1>
+    <p class="subtitle" id="final-score-text"></p>
+    <p class="subtitle" style="margin-top:-6px">Введите имя для сохранения:</p>
+    <input id="player-name" type="text" placeholder="Ваш никнейм" maxlength="20" spellcheck="false">
+    <div class="btn-row">
+      <button class="btn" onclick="saveScore()">💾 Сохранить</button>
+      <button class="btn btn-secondary" onclick="showLeaderboard()">🏆 Лидерборд</button>
+    </div>
+    <button class="btn btn-secondary" onclick="showStart()">↩ Главное меню</button>
+  </div>
+
+  <!-- ── LEADERBOARD SCREEN ── -->
+  <div id="leaderboard-screen" class="overlay hidden">
+    <h1>🏆 Лидерборд</h1>
+    <div id="leaderboard-list"></div>
+    <button class="btn btn-secondary" onclick="showStart()">↩ Назад</button>
+  </div>
+</div>
+
+<script>
+// ─── Music ───────────────────────────────────────────────────────────────────
+const bgm = document.getElementById('bgm');
+bgm.volume = 0.6;
+
+function musicPlay()  { bgm.currentTime = 0; bgm.play().catch(() => {}); }
+function musicStop()  { bgm.pause(); bgm.currentTime = 0; }
+
+// ─── Canvas setup ───────────────────────────────────────────────────────────
+const canvas = document.getElementById('canvas');
+const ctx    = canvas.getContext('2d');
+
+const W = 580;
+const H = 720;
+canvas.width  = W;
+canvas.height = H;
+
+// ─── Images ─────────────────────────────────────────────────────────────────
+const imgNormal = new Image();
+const imgCatch  = new Image();
+imgNormal.src = '/static/game/imgs/position_0.png';
+imgCatch.src  = '/static/game/imgs/position_catch.png';
+
+// Player display size (scaled from originals: 343×326 and 350×369)
+const P_W           = 72;
+const P_H_NORMAL    = Math.round(P_W * 326 / 343);  // ~68
+const P_H_CATCH     = Math.round(P_W * 369 / 350);  // ~76
+const P_BOTTOM      = H - 10;  // bottom of player feet
+
+// ─── Difficulty configs ──────────────────────────────────────────────────────
+const DIFFICULTIES = {
+  easy: {
+    label:         '🌿 Легко',
+    hint:          '10 жизней · каждое пропущенное ❤️ = −1 жизнь',
+    color:         '#4caf50',
+    lives:         10,
+    spawnStart:    2600,
+    spawnMin:      700,
+    spdStart:      1.5,
+    spdMax:        5,
+    rampTime:      15000,
+    multi:         1,
+    heartMissStep: 1   // каждое пропущенное сердечко
+  },
+  normal: {
+    label:         '⚡ Нормально',
+    hint:          '10 жизней · каждое 2-е пропущенное ❤️ = −1 жизнь',
+    color:         '#ffc107',
+    lives:         10,
+    spawnStart:    2000,
+    spawnMin:      450,
+    spdStart:      2,
+    spdMax:        8,
+    rampTime:      12000,
+    multi:         1.5,
+    heartMissStep: 2   // каждое второе
+  },
+  hard: {
+    label:         '🔥 Сложно',
+    hint:          '7 жизней · каждое 3-е пропущенное ❤️ = −1 жизнь',
+    color:         '#f44336',
+    lives:         7,
+    spawnStart:    1400,
+    spawnMin:      280,
+    spdStart:      3,
+    spdMax:        12,
+    rampTime:       9000,
+    multi:         2,
+    heartMissStep: 3   // каждое третье
+  }
+};
+
+let selectedDiff = 'normal';
+
+function selectDiff(key) {
+  selectedDiff = key;
+  document.querySelectorAll('.diff-btn').forEach(b => b.classList.remove('selected'));
+  document.querySelector(`.diff-btn.${key}`).classList.add('selected');
+  document.getElementById('diff-hint').textContent = DIFFICULTIES[key].hint;
+}
+
+// ─── Game state ─────────────────────────────────────────────────────────────
+let score, lives, missedPoops, missedHearts, emojis;
+let gameRunning = false;
+let gameTime    = 0;
+let spawnTimer  = 0;
+
+const MAX_MISSED = 5;
+
+const player = {
+  x: W / 2,
+  catching: false,
+  catchTimer: 0,
+  get y() { return P_BOTTOM - (this.catching ? P_H_CATCH : P_H_NORMAL); },
+  get h() { return this.catching ? P_H_CATCH : P_H_NORMAL; }
+};
+
+// ─── Emoji pool ──────────────────────────────────────────────────────────────
+// 🎁 spawns separately with 1/100 chance per spawn event
+const EMOJI_POOL = ['💩','💩','💩','❤️'];
+const EMOJI_SIZE = 38;
+
+// ─── Key state ──────────────────────────────────────────────────────────────
+const keys = {};
+document.addEventListener('keydown', e => {
+  keys[e.key] = true;
+  if (['ArrowLeft','ArrowRight',' '].includes(e.key)) e.preventDefault();
+});
+document.addEventListener('keyup', e => { keys[e.key] = false; });
+
+// ─── Difficulty helpers ──────────────────────────────────────────────────────
+function diffCfg() { return DIFFICULTIES[selectedDiff]; }
+
+function spawnInterval() {
+  const d = diffCfg();
+  const t = Math.min(gameTime / d.rampTime, 1);
+  return d.spawnStart - t * (d.spawnStart - d.spawnMin);
+}
+
+function emojiSpeed() {
+  const d = diffCfg();
+  const t = Math.min(gameTime / d.rampTime, 1);
+  return (d.spdStart + t * (d.spdMax - d.spdStart)) * (16 / 1000);
+}
+
+function spawnEmoji() {
+  const margin = EMOJI_SIZE;
+  // 1/100 chance to spawn a gift instead
+  const type = Math.random() < 0.01
+    ? '🎁'
+    : EMOJI_POOL[Math.floor(Math.random() * EMOJI_POOL.length)];
+  emojis.push({
+    x:    margin + Math.random() * (W - margin * 2),
+    y:    -EMOJI_SIZE,
+    type,
+    spd:  emojiSpeed() * (0.85 + Math.random() * 0.3)
+  });
+}
+
+// ─── Update ─────────────────────────────────────────────────────────────────
+let lastTime = 0;
+
+function update(dt) {
+  gameTime   += dt;
+  spawnTimer += dt;
+
+  if (spawnTimer >= spawnInterval()) {
+    spawnEmoji();
+    spawnTimer = 0;
+  }
+
+  // Player movement
+  const SPEED = 0.42; // px/ms
+  if (keys['ArrowLeft'])  player.x -= SPEED * dt;
+  if (keys['ArrowRight']) player.x += SPEED * dt;
+  player.x = Math.max(P_W / 2, Math.min(W - P_W / 2, player.x));
+
+  // Catch animation countdown
+  if (player.catching) {
+    player.catchTimer -= dt;
+    if (player.catchTimer <= 0) player.catching = false;
+  }
+
+  // Emoji physics + collision
+  const playerLeft  = player.x - P_W / 2 + 6;   // slight horizontal inset
+  const playerRight = player.x + P_W / 2 - 6;
+  const playerTop   = player.y;
+  const playerBot   = P_BOTTOM;
+
+  for (let i = emojis.length - 1; i >= 0; i--) {
+    const e = emojis[i];
+    e.y += e.spd * dt;
+
+    // Bounding box collision
+    const eL = e.x - EMOJI_SIZE / 2;
+    const eR = e.x + EMOJI_SIZE / 2;
+    const eT = e.y - EMOJI_SIZE / 2;
+    const eB = e.y + EMOJI_SIZE / 2;
+
+    if (eR > playerLeft && eL < playerRight && eB > playerTop && eT < playerBot) {
+      // Caught!
+      if (e.type === '💩') {
+        score += Math.round(10 * diffCfg().multi);
+      } else if (e.type === '🎁') {
+        lives += 1;
+      } else {
+        lives -= 1;
+      }
+      player.catching   = true;
+      player.catchTimer = 320;
+      emojis.splice(i, 1);
+
+      if (lives <= 0) { endGame(); return; }
+      continue;
+    }
+
+    // Fell off screen
+    if (e.y - EMOJI_SIZE / 2 > H) {
+      if (e.type === '💩') {
+        missedPoops++;
+        if (missedPoops >= MAX_MISSED) { endGame(); return; }
+      } else if (e.type === '❤️') {
+        missedHearts++;
+        if (missedHearts % diffCfg().heartMissStep === 0) {
+          lives--;
+          if (lives <= 0) { endGame(); return; }
+        }
+      }
+      emojis.splice(i, 1);
+    }
+  }
+}
+
+// ─── Draw ────────────────────────────────────────────────────────────────────
+// Stars pre-generated once
+const STARS = Array.from({length: 80}, () => ({
+  x: Math.random() * W,
+  y: Math.random() * H * 0.7,
+  r: 0.5 + Math.random() * 1.5,
+  a: 0.3 + Math.random() * 0.7
+}));
+
+function draw() {
+  // Sky gradient
+  const grad = ctx.createLinearGradient(0, 0, 0, H);
+  grad.addColorStop(0,   '#030918');
+  grad.addColorStop(0.6, '#0d1f4a');
+  grad.addColorStop(1,   '#162040');
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, 0, W, H);
+
+  // Stars
+  for (const s of STARS) {
+    ctx.beginPath();
+    ctx.arc(s.x, s.y, s.r, 0, Math.PI * 2);
+    ctx.fillStyle = `rgba(255,255,255,${s.a})`;
+    ctx.fill();
+  }
+
+  // Ground line
+  ctx.strokeStyle = 'rgba(100,150,255,0.2)';
+  ctx.lineWidth   = 2;
+  ctx.beginPath();
+  ctx.moveTo(0, P_BOTTOM + 2);
+  ctx.lineTo(W, P_BOTTOM + 2);
+  ctx.stroke();
+
+  // Falling emojis
+  ctx.font          = `${EMOJI_SIZE}px serif`;
+  ctx.textAlign     = 'center';
+  ctx.textBaseline  = 'middle';
+  for (const e of emojis) {
+    ctx.fillText(e.type, e.x, e.y);
+  }
+
+  // Player sprite
+  const img = player.catching ? imgCatch : imgNormal;
+  const ph  = player.catching ? P_H_CATCH : P_H_NORMAL;
+  ctx.drawImage(img, player.x - P_W / 2, player.y, P_W, ph);
+
+  // HUD
+  drawHUD();
+}
+
+function drawHUD() {
+  // Score
+  ctx.font          = 'bold 22px Arial';
+  ctx.fillStyle     = '#ffffff';
+  ctx.textAlign     = 'left';
+  ctx.textBaseline  = 'top';
+  ctx.fillText(`Счёт: ${score}`, 14, 14);
+
+  // Lives
+  ctx.font         = '18px serif';
+  ctx.textAlign    = 'right';
+  ctx.textBaseline = 'top';
+  const heartsStr  = '❤️'.repeat(Math.max(0, lives));
+  ctx.fillText(heartsStr, W - 14, 14);
+
+  // Missed poops bar
+  const barY = 46;
+  ctx.font          = '13px Arial';
+  ctx.fillStyle     = 'rgba(255,255,255,0.5)';
+  ctx.textAlign     = 'left';
+  ctx.textBaseline  = 'top';
+  ctx.fillText('Пропущено:', 14, barY);
+
+  ctx.font         = '18px serif';
+  ctx.textAlign    = 'left';
+  ctx.textBaseline = 'top';
+  const poopStr    = '💩'.repeat(missedPoops) + '⬜'.repeat(MAX_MISSED - missedPoops);
+  ctx.fillText(poopStr, 110, barY - 1);
+
+  // Difficulty label
+  const d = diffCfg();
+  ctx.font          = 'bold 12px Arial';
+  ctx.fillStyle     = d.color;
+  ctx.textAlign     = 'left';
+  ctx.textBaseline  = 'top';
+  ctx.fillText(d.label, 14, 46);
+
+  // Speed indicator
+  const t = Math.min(gameTime / d.rampTime, 1);
+  if (t > 0.05) {
+    const spdRatio = (d.spdStart + t * (d.spdMax - d.spdStart)) / d.spdStart;
+    ctx.font          = '12px Arial';
+    ctx.fillStyle     = `rgba(150,200,255,${0.3 + t * 0.4})`;
+    ctx.textAlign     = 'right';
+    ctx.textBaseline  = 'top';
+    ctx.fillText(`⚡ x${spdRatio.toFixed(1)}`, W - 14, 46);
+  }
+}
+
+// ─── Game loop ───────────────────────────────────────────────────────────────
+function gameLoop(ts) {
+  if (!gameRunning) return;
+  const dt = Math.min(ts - lastTime, 50); // cap dt to avoid big jumps
+  lastTime = ts;
+  update(dt);
+  draw();
+  requestAnimationFrame(gameLoop);
+}
+
+// ─── Screen management ───────────────────────────────────────────────────────
+function hideAll() {
+  ['start-screen','gameover-screen','leaderboard-screen']
+    .forEach(id => document.getElementById(id).classList.add('hidden'));
+}
+
+function showStart() {
+  hideAll();
+  document.getElementById('start-screen').classList.remove('hidden');
+  // Draw idle frame
+  if (!gameRunning) draw();
+}
+
+function showLeaderboard() {
+  hideAll();
+  const lb   = getLeaderboard();
+  const list = document.getElementById('leaderboard-list');
+
+  if (!lb.length) {
+    list.innerHTML = '<p style="color:#aaa;padding:20px">Пока нет результатов</p>';
+  } else {
+    const medals = ['gold','silver','bronze'];
+    list.innerHTML = lb.map((e, i) => {
+      const diffKey   = e.diff || 'normal';
+      const diffLabel = { easy:'Легко', normal:'Нормально', hard:'Сложно' }[diffKey] || diffKey;
+      return `<div class="lb-entry ${medals[i] || ''}">
+        <span>${i+1}. ${escHtml(e.name)}<span class="lb-diff ${diffKey}">${diffLabel}</span></span>
+        <span>${e.score} очков</span>
+      </div>`;
+    }).join('');
+  }
+
+  document.getElementById('leaderboard-screen').classList.remove('hidden');
+}
+
+function escHtml(s) {
+  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+// ─── Game start / end ────────────────────────────────────────────────────────
+function startGame() {
+  score        = 0;
+  lives        = diffCfg().lives;
+  missedPoops  = 0;
+  missedHearts = 0;
+  emojis       = [];
+  gameTime    = 0;
+  spawnTimer  = 0;
+  player.x    = W / 2;
+  player.catching    = false;
+  player.catchTimer  = 0;
+
+  hideAll();
+  musicPlay();
+  gameRunning = true;
+  lastTime    = performance.now();
+  requestAnimationFrame(gameLoop);
+}
+
+function endGame() {
+  gameRunning = false;
+  musicStop();
+  hideAll();
+  const d = diffCfg();
+  document.getElementById('final-score-text').textContent =
+    `${d.label} · Счёт: ${score} очков`;
+  document.getElementById('player-name').value = '';
+  document.getElementById('gameover-screen').classList.remove('hidden');
+}
+
+// ─── Leaderboard (localStorage) ─────────────────────────────────────────────
+function getLeaderboard() {
+  try { return JSON.parse(localStorage.getItem('poop_lb') || '[]'); }
+  catch { return []; }
+}
+
+function saveScore() {
+  const raw  = document.getElementById('player-name').value.trim();
+  const name = raw || 'Аноним';
+  const lb   = getLeaderboard();
+  lb.push({ name, score, diff: selectedDiff });
+  lb.sort((a, b) => b.score - a.score);
+  lb.splice(10);
+  localStorage.setItem('poop_lb', JSON.stringify(lb));
+  showLeaderboard();
+}
+
+// ─── Enter to save name ──────────────────────────────────────────────────────
+document.getElementById('player-name').addEventListener('keydown', e => {
+  if (e.key === 'Enter') saveScore();
+});
+
+// ─── Initial idle draw ───────────────────────────────────────────────────────
+// Wait for images to load, then draw start frame
+let imagesLoaded = 0;
+function onImageLoad() {
+  imagesLoaded++;
+  if (imagesLoaded === 2) draw();
+}
+imgNormal.onload = onImageLoad;
+imgCatch.onload  = onImageLoad;
+</script>
+</body>
+</html>

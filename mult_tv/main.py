@@ -1,9 +1,10 @@
 import os
 from fastapi import FastAPI, Request
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from config import STATIC_DIR
 from db import init_db
+from auth import get_current_user
 from routes import auth, video, admin, proxy
 
 app = FastAPI()
@@ -30,5 +31,15 @@ app.include_router(proxy.router)
 async def read_index():
     with open(os.path.join(STATIC_DIR, "index.html"), "r", encoding="utf-8") as f:
         return f.read()
+
+
+@app.get("/game", response_class=HTMLResponse)
+async def serve_game(request: Request):
+    user = get_current_user(request)
+    if not user:
+        return RedirectResponse(url="/", status_code=302)
+    with open(os.path.join(STATIC_DIR, "game", "index.html"), "r", encoding="utf-8") as f:
+        return f.read()
+
 
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")

@@ -781,6 +781,9 @@
                                 </button>
                             </>
                         )}
+                        <button onClick={() => window.open('/game', '_blank')} className="text-zinc-500 text-[9px] uppercase tracking-widest hover:text-white transition-colors border border-zinc-800 px-3 py-1 rounded-lg">
+                            Game
+                        </button>
                         <button onClick={handleLogout} className="text-zinc-600 text-[9px] uppercase tracking-widest hover:text-red-500 transition-colors">
                             Logout
                         </button>
@@ -792,6 +795,15 @@
                     {showHearts && <HeartRain />}
 
                     <div className="flex items-center gap-6" style={{maxWidth: '1100px', width: '100%'}}>
+                        {/* Кнопка игры справа — место зарезервировано всегда */}
+                        <div className="hidden lg:flex flex-col items-center justify-center w-48 shrink-0">
+                            <button onClick={() => window.open('/game', '_blank')}
+                                className="flex flex-col items-center gap-3 p-5 rounded-2xl border border-zinc-800 bg-zinc-900/50 hover:bg-zinc-800/60 hover:border-zinc-600 transition-all duration-200 group w-full">
+                                <span className="text-4xl group-hover:scale-110 transition-transform duration-200">💩</span>
+                                <span className="text-zinc-400 text-[10px] uppercase tracking-widest group-hover:text-white transition-colors">Play Game</span>
+                            </button>
+                        </div>
+
                         {/* Список сериалов слева — место зарезервировано всегда */}
                         <div className="hidden lg:flex flex-col gap-1 w-48 shrink-0 max-h-[500px] overflow-y-auto pr-2">
                             {isOn && shows.map(s => (

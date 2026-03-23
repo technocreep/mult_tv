@@ -14,6 +14,7 @@ COPY main.py config.py db.py auth.py models.py video.py ./
 COPY routes/ ./routes/
 COPY index.html ./static/
 COPY assets/ ./static/assets/
+COPY game/ ./static/game/
 
 # Открываем порт
 EXPOSE 8000
