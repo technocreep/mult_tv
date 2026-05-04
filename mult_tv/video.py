@@ -2,8 +2,18 @@ import os
 import json
 import random
 import subprocess
+import time
 from fastapi import HTTPException
 from config import VIDEO_DIR, COMPLETE_DIR
+
+_video_cache = None
+_video_cache_time = 0.0
+_VIDEO_CACHE_TTL = 300  # секунд
+
+
+def invalidate_video_cache():
+    global _video_cache
+    _video_cache = None
 
 
 def safe_path(base_dir: str, user_path: str):
@@ -34,7 +44,12 @@ def get_blocked_files():
 
 
 def get_all_videos():
-    """Собирает все mp4-файлы из VIDEO_DIR, исключая заблокированные и репорты."""
+    """Собирает все mp4-файлы из VIDEO_DIR, исключая заблокированные и репорты.
+    Результат кэшируется на 5 минут."""
+    global _video_cache, _video_cache_time
+    now = time.time()
+    if _video_cache is not None and now - _video_cache_time < _VIDEO_CACHE_TTL:
+        return _video_cache
     blocked = get_blocked_files()
     files = []
     for root, dirs, filenames in os.walk(VIDEO_DIR):
@@ -44,6 +59,8 @@ def get_all_videos():
                 rel_path = os.path.relpath(full_path, VIDEO_DIR)
                 if rel_path not in blocked:
                     files.append(full_path)
+    _video_cache = files
+    _video_cache_time = now
     return files
 
 

@@ -1,11 +1,12 @@
 import os
+import asyncio
 import sqlite3
 from fastapi import APIRouter, HTTPException, Request
 from config import VIDEO_DIR
 from db import get_db
 from auth import require_admin, hash_password
 from datetime import datetime
-from video import safe_path, get_all_videos_unfiltered, get_show_name, validate_video
+from video import safe_path, get_all_videos_unfiltered, get_show_name, validate_video, invalidate_video_cache
 from models import CreateUserRequest, ChangePasswordRequest, PlayRequest
 
 router = APIRouter(prefix="/api/admin")
@@ -100,6 +101,7 @@ async def delete_video(file_path: str, request: Request):
     if not os.path.isfile(full_path):
         raise HTTPException(status_code=404)
     os.remove(full_path)
+    invalidate_video_cache()
     return {"ok": True}
 
 
@@ -195,7 +197,7 @@ async def validate_videos(request: Request, mode: str = "new"):
     require_admin(request)
     conn = get_db()
 
-    all_files = get_all_videos_unfiltered()
+    all_files = await asyncio.to_thread(get_all_videos_unfiltered)
 
     if mode == "all":
         conn.execute('DELETE FROM video_checks')
@@ -211,7 +213,7 @@ async def validate_videos(request: Request, mode: str = "new"):
     results = []
     for i, f in enumerate(to_check, 1):
         rel_path = os.path.relpath(f, "/downloads")
-        check = validate_video(f)
+        check = await asyncio.to_thread(validate_video, f)
         status = "OK " if check["ok"] else "ERR"
         errors_str = f' — {"; ".join(check["errors"])}' if check["errors"] else ""
         print(f"[VALIDATE] {i}/{total_to_check} {status} {rel_path}{errors_str}", flush=True)
@@ -237,6 +239,7 @@ async def validate_videos(request: Request, mode: str = "new"):
         })
 
     conn.commit()
+    invalidate_video_cache()
 
     ok_now = sum(1 for r in results if r.get("ok"))
     err_now = len(results) - ok_now

@@ -1,13 +1,16 @@
 import os
+import asyncio
 import random
 from datetime import datetime, timedelta
 from fastapi import APIRouter, HTTPException, Request
-from fastapi.responses import FileResponse
+from starlette.responses import StreamingResponse
 from config import VIDEO_DIR
 from db import get_db
 from auth import require_auth
 from video import safe_path, get_show_name, get_all_videos, get_sorted_shows, pick_from_show
 from models import MarkWatchedRequest, ReportRequest
+
+CHUNK_SIZE = 1024 * 1024  # 1 MB
 
 router = APIRouter()
 
@@ -29,7 +32,7 @@ async def get_random_video(request: Request, current_path: str = "", same_folder
     cursor.execute('SELECT file_path FROM history WHERE watched_at > ?', (thirty_days_ago,))
     recently_watched = [row[0] for row in cursor.fetchall()]
 
-    all_files = get_all_videos()
+    all_files = await asyncio.to_thread(get_all_videos)
 
     if not all_files:
         conn.close()
@@ -76,7 +79,49 @@ async def stream_video(file_path: str, request: Request):
     full_path = safe_path(VIDEO_DIR, file_path)
     if not os.path.isfile(full_path):
         raise HTTPException(status_code=404)
-    return FileResponse(full_path)
+
+    file_size = os.path.getsize(full_path)
+    range_header = request.headers.get("range")
+
+    start = 0
+    end = file_size - 1
+    status_code = 200
+    headers = {
+        "Accept-Ranges": "bytes",
+        "Content-Length": str(file_size),
+    }
+
+    if range_header:
+        try:
+            range_val = range_header.strip().replace("bytes=", "")
+            range_start, range_end = range_val.split("-")
+            start = int(range_start)
+            end = int(range_end) if range_end else file_size - 1
+            end = min(end, file_size - 1)
+            length = end - start + 1
+            headers["Content-Range"] = f"bytes {start}-{end}/{file_size}"
+            headers["Content-Length"] = str(length)
+            status_code = 206
+        except (ValueError, AttributeError):
+            raise HTTPException(status_code=400, detail="Invalid Range header")
+
+    async def file_iterator(path: str, offset: int, last: int):
+        with open(path, "rb") as f:
+            f.seek(offset)
+            remaining = last - offset + 1
+            while remaining > 0:
+                chunk = await asyncio.to_thread(f.read, min(CHUNK_SIZE, remaining))
+                if not chunk:
+                    break
+                remaining -= len(chunk)
+                yield chunk
+
+    return StreamingResponse(
+        file_iterator(full_path, start, end),
+        status_code=status_code,
+        headers=headers,
+        media_type="video/mp4",
+    )
 
 
 @router.post("/api/mark_watched")
