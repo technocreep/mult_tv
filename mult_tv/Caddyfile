@@ -1,3 +1,9 @@
 stasymult.ru {
-    reverse_proxy web_tv:8000
+    reverse_proxy web_tv:8000 {
+        flush_interval -1
+        transport http {
+            response_header_timeout 0
+            read_buffer 64kb
+        }
+    }
 }
