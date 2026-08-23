@@ -1,4 +1,4 @@
-stasymult.ru {
+stasymult.online, www.stasymult.online, stasymult.ru {
     reverse_proxy web_tv:8000 {
         flush_interval -1
         transport http {
