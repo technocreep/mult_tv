@@ -1,7 +1,7 @@
 import secrets
 from datetime import datetime, timedelta
 from fastapi import APIRouter, HTTPException, Request, Response
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, RedirectResponse
 from config import SESSION_MAX_AGE_DAYS
 from db import get_db
 from auth import (
@@ -69,3 +69,15 @@ async def me(request: Request):
     if not user:
         raise HTTPException(status_code=401)
     return user
+
+
+@router.get("/authz/admin")
+async def authz_admin(request: Request):
+    """Проверка прав для forward_auth в Caddy (доступ к /browser/).
+
+    204 — пускаем, редирект на главную — если это не админ.
+    """
+    user = get_current_user(request)
+    if not user or user["role"] != "admin":
+        return RedirectResponse(url="/", status_code=302)
+    return Response(status_code=204, headers={"X-Auth-User": user["username"]})

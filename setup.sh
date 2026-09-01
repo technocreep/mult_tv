@@ -6,6 +6,7 @@ mkdir -p ./mult_tv/app
 mkdir -p ./mult_tv/downloads
 mkdir -p ./mult_tv/watch
 mkdir -p ./mult_tv/config
+mkdir -p ./mult_tv/browser
 
 # 2. Создание пустого файла базы данных
 touch ./mult_tv/app/history.db

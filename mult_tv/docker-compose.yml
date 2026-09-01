@@ -17,6 +17,27 @@ services:
       - 51413:51413/udp
     restart: unless-stopped
 
+  firefox:
+    image: lscr.io/linuxserver/firefox:latest
+    container_name: firefox
+    security_opt:
+      - seccomp:unconfined
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=Europe/Moscow
+      # Отдаётся под /browser/ — Caddy проксирует без обрезки префикса
+      - SUBFOLDER=/browser/
+      - TITLE=mult_tv browser
+    volumes:
+      - ./browser:/config
+      # .torrent, сохранённый в /watch, Transmission подхватит автоматически
+      - ./watch:/watch
+    # Порт наружу НЕ публикуем: контейнер доступен только через Caddy,
+    # который пускает внутрь только админов
+    shm_size: "1gb"
+    restart: unless-stopped
+
   web_tv:
     build: .
     container_name: mult_tv_app
@@ -43,6 +64,7 @@ services:
     restart: unless-stopped
     depends_on:
       - web_tv
+      - firefox
 
 volumes:
   caddy_data:

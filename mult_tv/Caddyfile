@@ -1,9 +1,25 @@
 stasymult.online, www.stasymult.online {
-    reverse_proxy web_tv:8000 {
-        flush_interval -1
-        transport http {
-            response_header_timeout 0
-            read_buffer 64kb
+    # Встроенный браузер (контейнер firefox). Доступ только для админов:
+    # Caddy спрашивает у приложения /api/authz/admin, и пропускает дальше
+    # только если сессионная кука принадлежит админу.
+    handle /browser {
+        redir /browser/ 308
+    }
+
+    handle /browser/* {
+        forward_auth web_tv:8000 {
+            uri /api/authz/admin
+        }
+        reverse_proxy firefox:3000
+    }
+
+    handle {
+        reverse_proxy web_tv:8000 {
+            flush_interval -1
+            transport http {
+                response_header_timeout 0
+                read_buffer 64kb
+            }
         }
     }
 }

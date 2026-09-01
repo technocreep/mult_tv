@@ -205,3 +205,10 @@ cython_debug/
 marimo/_static/
 marimo/_lsp/
 __marimo__/
+
+# mult_tv
+mult_tv/app/
+mult_tv/config/
+mult_tv/browser/
+mult_tv/watch/
+mult_tv/.env

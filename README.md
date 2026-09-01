@@ -74,6 +74,21 @@ To convert MKV/AVI files to MP4 (picks the right audio track automatically):
 
 Transmission is available at `http://your.domain.com/transmission/` (admin login required). Completed downloads land in `downloads/complete/` automatically.
 
+## Built-in browser
+
+An admin-only Firefox instance runs in its own container and is served at
+`https://your.domain.com/browser/` (the **Browser** button in the admin panel).
+
+Access is gated by Caddy's `forward_auth`: every request to `/browser/*` is checked
+against `/api/authz/admin` first, so only a logged-in admin session gets through.
+The container publishes no host ports — it is reachable only through Caddy.
+
+`downloads/watch/` is mounted into it at `/watch`, so a `.torrent` saved there from
+the browser is picked up by Transmission automatically.
+
+Firefox needs roughly 1 GB of RAM plus 1 GB of shared memory (`shm_size`), so make
+sure the host has headroom before enabling it.
+
 ## Users
 
 | Role  | Can do |
